@@ -1,0 +1,983 @@
+# ============================================================================
+# 固定事件 - 必须触发，优先级高于自由事件
+# 基于原作《魔法少女的魔女审判》设定
+# ============================================================================
+# 修正版：统一格式、ID、变量引用
+# ============================================================================
+
+# ===================
+# 格式说明
+# ===================
+# - 角色ID统一用英文小写：hiro, meruru, aima 等
+# - 变量引用格式：${variable_name}
+# - 触发条件：trigger.type 指定类型（auto/event_count/condition/after_event）
+# - 布尔值统一用 true/false（不加引号）
+# ===================
+
+# ===================
+# 条件字符串说明（代码需实现解析）
+# ===================
+# highest_madness_above_70       → max(all_characters.madness) > 70
+# player_madness_above_80        → player.madness > 80
+# flag_murder_occurred           → flags["murder_occurred"] == true
+# day3_night_no_murder           → day==3 && phase=="night" && !murder_occurred && max(madness)<=70
+# all_stress_70_to_85_and_library_clue_and_all_alive
+#                                → all(70 <= char.stress <= 85) && flags["library_clue_found"] && all_alive
+# vote_result_correct            → voted_id == murderer_id
+# vote_result_player             → voted_id == "player"
+# vote_result_wrong              → voted_id != murderer_id && voted_id != "player"
+# debate_finished                → 辩论阶段完成（代码控制）
+# investigation_count_zero_or_time_expired → investigation_count <= 0
+# player_at_library              → player.location == "图书室"
+# default                        → 兜底条件，前面都不满足时触发
+# ===================
+
+fixed_events:
+
+  # ===========================================================================
+  # 第1天 - 序章：觉醒与囚禁
+  # ===========================================================================
+
+  day1_awakening:
+    id: "day1_awakening"
+    name: "监牢中觉醒"
+    trigger:
+      type: "auto"
+      day: 1
+      phase: "dawn"
+    priority: 100
+    scene:
+      location: "牢房区"
+      required_characters: ["player"]
+      description: "玩家在陌生的牢房中醒来"
+    script:
+      - speaker: "narrator"
+        text_cn: "怀着对崭新生活的期待入睡，却在昏暗的牢房中醒来。"
+      - speaker: "narrator"
+        text_cn: "冰冷的石墙，生锈的铁栏，这里是...监牢？"
+      - speaker: "narrator"
+        text_cn: "你没有任何头绪，自己为什么会被关到这种地方。"
+      - speaker: "narrator"
+        text_cn: "而这座监牢，坐落于与世隔绝的孤岛之上——"
+    outcomes:
+      player:
+        stress: 5
+    next_phase: "morning"
+
+  day1_morning_assembly:
+    id: "day1_morning"
+    name: "第一天早晨集合"
+    trigger:
+      type: "auto"
+      day: 1
+      phase: "morning"
+    priority: 100
+    scene:
+      location: "食堂"
+      required_characters: "all"
+      description: "13名魔法少女第一次在食堂集合"
+    script:
+      - speaker: "narrator"
+        text_cn: "监牢的广播响起，刺耳的铃声回荡在走廊中..."
+      - speaker: "narrator"
+        text_cn: "所有人被召集到食堂。你发现，被关在这里的少女一共有13人。"
+      - speaker: "narrator"
+        text_cn: "一只会说话的猫头鹰出现在食堂中央的高台上——"
+      - speaker: "warden"
+        text_cn: "各位早安。我是这座牢屋敷的典狱长。"
+      - speaker: "warden"
+        text_cn: "经认定，各位相当可能是【魔女】——你们将会对人类社会造成威胁。"
+      - speaker: "warden"
+        text_cn: "请各位以囚犯的身份，在这里生活下去。"
+    outcomes:
+      all:
+        stress: 10
+    next_event: "day1_rules_announcement"
+
+  day1_rules_announcement:
+    id: "day1_rules"
+    name: "规则宣布"
+    trigger:
+      type: "after_event"
+      after: "day1_morning"
+    priority: 99
+    scene:
+      location: "食堂"
+      required_characters: "all"
+      description: "典狱长宣布监牢规则"
+    script:
+      - speaker: "warden"
+        text_cn: "现在宣布牢屋敷的规则。请各位务必遵守。"
+      - speaker: "warden"
+        text_cn: "规则一：每位囚犯将配发一台功能受限的手机，其中安装了【魔女图鉴】。"
+      - speaker: "warden"
+        text_cn: "规则二：严禁破坏监牢设施。违者将受到惩罚。"
+      - speaker: "warden"
+        text_cn: "规则三：夜间就寝时间，禁止在牢房外活动。"
+      - speaker: "warden"
+        text_cn: "规则四：若发生杀人事件，将召开【魔女审判】。"
+      - speaker: "warden"
+        text_cn: "魔女审判中，各位需投票选出【魔女】——也就是凶手。"
+      - speaker: "warden"
+        text_cn: "选中者将被处刑。若投票结果分歧过大..."
+      - speaker: "warden"
+        text_cn: "将执行全员处刑。"
+      - speaker: "narrator"
+        text_cn: "食堂里响起一阵骚动和恐惧的低语..."
+    outcomes:
+      all:
+        stress: 15
+        madness: 2
+    system_unlock:
+      - "魔女图鉴"
+      - "证据收集"
+    next_event: "day1_hiro_incident"
+
+  day1_hiro_incident:
+    id: "day1_hiro"
+    name: "希罗顶撞典狱长"
+    trigger:
+      type: "after_event"
+      after: "day1_rules"
+      config_check: "include_hiro_event"
+    priority: 98
+    scene:
+      location: "食堂"
+      required_characters: "all"
+      description: "希罗对典狱长的规则提出异议"
+    script:
+      - speaker: "hiro"
+        text_cn: "等等，这算什么？未经审判就把我们关起来？"
+      - speaker: "hiro"
+        text_cn: "我们又没有犯罪，凭什么被当作囚犯对待！"
+      - speaker: "warden"
+        text_cn: "哦？有人对规则有意见吗？"
+      - speaker: "narrator"
+        text_cn: "典狱长的眼睛闪烁着冷酷的光芒。"
+      - speaker: "warden"
+        text_cn: "那就让我来展示一下，违抗规则的下场。"
+      - speaker: "narrator"
+        text_cn: "看守们冲上前，将希罗压制住——"
+    outcomes:
+      hiro:
+        stress: 30
+      all:
+        stress: 20
+    flags_set:
+      - "hiro_defied_warden"
+    next_event: "day1_introduction"
+
+  day1_introduction:
+    id: "day1_intro"
+    name: "角色自我介绍"
+    trigger:
+      type: "after_event"
+      after: "day1_hiro"
+    priority: 95
+    scene:
+      location: "食堂"
+      required_characters: "all_alive"
+      description: "少女们互相认识"
+    script:
+      - speaker: "warden"
+        text_cn: "现在，请各位进行自我介绍。"
+      - speaker: "warden"
+        text_cn: "你们将在这里共同生活，互相了解是必要的。"
+      - speaker: "narrator"
+        text_cn: "少女们开始逐一介绍自己..."
+    outcomes:
+      all:
+        stress: -5
+    system_unlock:
+      - "character_profiles"
+      - "relationship_system"
+    next_phase: "free_time"
+
+  day1_lunch:
+    id: "day1_lunch"
+    name: "第一天午餐"
+    trigger:
+      type: "event_count"
+      day: 1
+      count: 3
+      phase: "free_time"
+    priority: 90
+    scene:
+      location: "食堂"
+      required_characters: "all_alive"
+      description: "午餐时间，全员聚集"
+    script:
+      - speaker: "narrator"
+        text_cn: "午餐时间到了，所有人聚集在食堂..."
+      - speaker: "narrator"
+        text_cn: "简陋的饭菜被端上桌，气氛依然沉重。"
+    allow_free_events: true
+    outcomes:
+      all:
+        stress: 3
+    next_phase: "free_time"
+
+  day1_dinner:
+    id: "day1_dinner"
+    name: "第一天晚餐"
+    trigger:
+      type: "event_count"
+      day: 1
+      count: 6
+      phase: "free_time"
+    priority: 90
+    scene:
+      location: "食堂"
+      required_characters: "all_alive"
+      description: "晚餐时间"
+    script:
+      - speaker: "narrator"
+        text_cn: "晚餐时间。今天的第一天即将结束..."
+      - speaker: "narrator"
+        text_cn: "少女们的脸上写满疲惫与不安。"
+    allow_free_events: true
+    outcomes:
+      all:
+        stress: 2
+    next_phase: "free_time"
+
+  day1_night:
+    id: "day1_night"
+    name: "第一天就寝"
+    trigger:
+      type: "event_count"
+      day: 1
+      count: 9
+      phase: "free_time"
+    priority: 100
+    scene:
+      location: "牢房区"
+      description: "就寝时间，所有人回到各自牢房"
+    script:
+      - speaker: "narrator"
+        text_cn: "熄灯时间到了。铃声响起，催促着所有人回到牢房。"
+      - speaker: "narrator"
+        text_cn: "沉重的铁门被锁上，黑暗笼罩了一切。"
+      - speaker: "narrator"
+        text_cn: "第一天结束了。"
+    outcomes:
+      all:
+        stress: -5
+    next_day: true
+    trigger_summary: true
+
+  # ===========================================================================
+  # 第2天 - 魔法觉醒与压力积累
+  # ===========================================================================
+
+  day2_morning:
+    id: "day2_morning"
+    name: "第二天早晨"
+    trigger:
+      type: "auto"
+      day: 2
+      phase: "morning"
+    priority: 100
+    scene:
+      location: "食堂"
+      required_characters: "all_alive"
+    script:
+      - speaker: "narrator"
+        text_cn: "第二天的早晨。睡眠并没有带走恐惧。"
+      - speaker: "narrator"
+        text_cn: "气氛比昨天更加沉重，少女们的眼神中多了一丝疲惫与警惕。"
+      - speaker: "warden"
+        text_cn: "早安，囚犯们。今天有一项特别的活动。"
+    outcomes:
+      all:
+        stress: 5
+    next_phase: "free_time"
+
+  day2_magic_reveal:
+    id: "day2_magic"
+    name: "魔法公开事件"
+    trigger:
+      type: "event_count"
+      day: 2
+      count: 4
+      phase: "free_time"
+    priority: 95
+    scene:
+      location: "庭院"
+      required_characters: "all_alive"
+      description: "典狱长要求展示魔法能力"
+    script:
+      - speaker: "warden"
+        text_cn: "各位都携带着【魔女因子】。这意味着你们都拥有某种魔法能力。"
+      - speaker: "warden"
+        text_cn: "今天，你们要向大家展示自己的魔法。"
+      - speaker: "narrator"
+        text_cn: "少女们被迫一一展示自己的能力..."
+      - speaker: "narrator"
+        text_cn: "有人能让视线所及的物体漂浮，有人能操控他人的记忆..."
+      - speaker: "narrator"
+        text_cn: "这些超越常识的力量，在这个封闭的空间里显得格外危险。"
+      - speaker: "warden"
+        text_cn: "记住，魔女因子会随着压力而成长。"
+      - speaker: "warden"
+        text_cn: "当魔女因子完全觉醒，你们就会成为真正的【魔女】..."
+      - speaker: "warden"
+        text_cn: "届时，你们将无法抑制内心的杀人冲动。"
+    outcomes:
+      all:
+        stress: 15
+        madness: 5
+    flags_set:
+      - "magic_revealed"
+    system_unlock:
+      - "magic_abilities"
+    next_phase: "free_time"
+
+  day2_library_clue:
+    id: "day2_library"
+    name: "图书室线索"
+    trigger:
+      type: "condition"
+      day: 2
+      location: "图书室"
+      condition: "player_at_library"
+    priority: 80
+    scene:
+      location: "图书室"
+      description: "在图书室发现一本古老的书籍"
+    script:
+      - speaker: "narrator"
+        text_cn: "在图书室的角落，你发现了一本落满灰尘的古书..."
+      - speaker: "narrator"
+        text_cn: "书页上写满了奇怪的文字和符号。"
+      - speaker: "narrator"
+        text_cn: "【大魔女召唤仪式】...【13名魔女】...【觉醒条件】..."
+      - speaker: "narrator"
+        text_cn: "这是...什么？"
+    outcomes:
+      player:
+        stress: 5
+    flags_set:
+      - "library_clue_found"
+
+  day2_lunch:
+    id: "day2_lunch"
+    name: "第二天午餐"
+    trigger:
+      type: "event_count"
+      day: 2
+      count: 7
+      phase: "free_time"
+    priority: 90
+    scene:
+      location: "食堂"
+      required_characters: "all_alive"
+    script:
+      - speaker: "narrator"
+        text_cn: "午餐时间。经历了魔法展示后，气氛更加紧张了。"
+      - speaker: "narrator"
+        text_cn: "每个人都开始思考：谁的魔法最危险？谁会先失控？"
+    allow_free_events: true
+    outcomes:
+      all:
+        stress: 5
+    next_phase: "free_time"
+
+  day2_dinner:
+    id: "day2_dinner"
+    name: "第二天晚餐"
+    trigger:
+      type: "event_count"
+      day: 2
+      count: 10
+      phase: "free_time"
+    priority: 90
+    scene:
+      location: "食堂"
+      required_characters: "all_alive"
+    script:
+      - speaker: "narrator"
+        text_cn: "第二天的晚餐。压力在持续积累..."
+      - speaker: "narrator"
+        text_cn: "有人开始出现异常的举动，有人的眼神变得空洞..."
+    allow_free_events: true
+    outcomes:
+      all:
+        stress: 5
+    next_phase: "free_time"
+
+  day2_night:
+    id: "day2_night"
+    name: "第二天就寝"
+    trigger:
+      type: "event_count"
+      day: 2
+      count: 13
+      phase: "free_time"
+    priority: 100
+    scene:
+      location: "牢房区"
+      description: "第二晚"
+    script:
+      - speaker: "narrator"
+        text_cn: "第二个夜晚降临。空气中弥漫着不安的气息。"
+      - speaker: "narrator"
+        text_cn: "有人在梦中呓语，有人彻夜难眠..."
+      - speaker: "narrator"
+        text_cn: "魔女因子在黑暗中悄悄成长..."
+    outcomes:
+      all:
+        stress: -3
+        madness: 3
+    next_day: true
+    trigger_summary: true
+
+  # ===========================================================================
+  # 第3天 - 临界点：杀人或觉醒
+  # ===========================================================================
+
+  day3_morning:
+    id: "day3_morning"
+    name: "第三天早晨"
+    trigger:
+      type: "auto"
+      day: 3
+      phase: "morning"
+    priority: 100
+    scene:
+      location: "食堂"
+      required_characters: "all_alive"
+    script:
+      - speaker: "narrator"
+        text_cn: "第三天。空气仿佛凝固了。"
+      - speaker: "narrator"
+        text_cn: "每个人的脸上都写满了疲惫、恐惧，还有...某种危险的光芒。"
+      - speaker: "warden"
+        text_cn: "各位的魔女因子成长得很好呢。"
+      - speaker: "warden"
+        text_cn: "我很期待...今天会发生什么有趣的事情。"
+    outcomes:
+      all:
+        stress: 10
+        madness: 5
+    next_phase: "free_time"
+
+  day3_stress_check:
+    id: "day3_stress"
+    name: "压力临界检测"
+    trigger:
+      type: "event_count"
+      day: 3
+      count: 2
+      phase: "free_time"
+    priority: 85
+    scene:
+      description: "系统检测所有角色的压力状态"
+    script:
+      - speaker: "narrator"
+        text_cn: "你感到一股无形的压力笼罩着整个牢屋敷..."
+      - speaker: "narrator"
+        text_cn: "有人在走廊里自言自语，有人的笑声变得诡异..."
+    check_murder_condition: true
+    check_true_end_condition: true
+    check_good_end_condition: true
+
+  day3_lunch:
+    id: "day3_lunch"
+    name: "第三天午餐"
+    trigger:
+      type: "event_count"
+      day: 3
+      count: 5
+      phase: "free_time"
+    priority: 90
+    scene:
+      location: "食堂"
+      required_characters: "all_alive"
+    script:
+      - speaker: "narrator"
+        text_cn: "午餐时间。但几乎没有人有食欲..."
+      - speaker: "narrator"
+        text_cn: "紧张的气氛让人窒息。每个人都在观察着彼此。"
+    allow_free_events: true
+    outcomes:
+      all:
+        stress: 8
+    next_phase: "free_time"
+
+  day3_dinner:
+    id: "day3_dinner"
+    name: "第三天晚餐"
+    trigger:
+      type: "event_count"
+      day: 3
+      count: 8
+      phase: "free_time"
+    priority: 90
+    scene:
+      location: "食堂"
+      required_characters: "all_alive"
+    script:
+      - speaker: "narrator"
+        text_cn: "第三天的晚餐。最后的夜晚即将来临..."
+    allow_free_events: true
+    outcomes:
+      all:
+        stress: 5
+    next_phase: "free_time"
+
+  day3_night:
+    id: "day3_night"
+    name: "第三天夜晚"
+    trigger:
+      type: "event_count"
+      day: 3
+      count: 10
+      phase: "free_time"
+    priority: 95
+    scene:
+      location: "牢房区"
+      description: "第三晚 - 命运的分歧点"
+    script:
+      - speaker: "narrator"
+        text_cn: "第三天的夜晚降临..."
+    # 分歧逻辑（按优先级顺序检查）
+    branch:
+      - condition: "all_stress_70_to_85_and_library_clue_and_all_alive"
+        next_event: "true_end_trigger"
+        description: "True End条件达成"
+      - condition: "highest_madness_above_70"
+        next_event: "murder_trigger"
+        description: "有人魔女化，触发杀人"
+      - condition: "default"
+        next_event: "good_end"
+        description: "平安度过，Good End"
+
+  # ===========================================================================
+  # 杀人事件系统
+  # ===========================================================================
+
+  murder_trigger:
+    id: "murder_trigger"
+    name: "杀人事件触发"
+    trigger:
+      type: "condition"
+      condition: "highest_madness_above_70"
+      day_min: 3
+      phase: "night"
+    priority: 200
+    scene:
+      location: "varies"
+      description: "有人的理智彻底崩溃了..."
+    script:
+      - speaker: "narrator"
+        text_cn: "这一夜，有什么不对劲..."
+      - speaker: "narrator"
+        text_cn: "走廊里传来异样的脚步声，然后是...尖叫。"
+      - speaker: "narrator"
+        text_cn: "接着，一切归于寂静。"
+    determine_murderer: "highest_madness"
+    determine_victim: "relationship_based"
+    flags_set:
+      - "murder_occurred"
+    next_phase: "murder_night"
+
+  murder_discovery:
+    id: "murder_discovery"
+    name: "发现尸体"
+    trigger:
+      type: "condition"
+      condition: "flag_murder_occurred"
+      phase: "morning"
+    priority: 200
+    scene:
+      location: "${crime_scene}"
+      required_characters: "all_alive"
+      description: "发现了尸体..."
+    script:
+      - speaker: "narrator"
+        text_cn: "早晨的阳光透过窗户，照亮了..."
+      - speaker: "narrator"
+        text_cn: "尖叫声划破了早晨的寂静。"
+      - speaker: "narrator"
+        text_cn: "有人...死了..."
+      - speaker: "warden"
+        text_cn: "哎呀，终于发生了呢。"
+      - speaker: "warden"
+        text_cn: "发现了尸体！现在开始进入调查时间。"
+    outcomes:
+      all:
+        stress: 30
+        madness: 10
+    next_phase: "investigation"
+
+  # ===========================================================================
+  # 调查阶段
+  # ===========================================================================
+
+  investigation_start:
+    id: "investigation_start"
+    name: "调查开始"
+    trigger:
+      type: "auto"
+      phase: "investigation"
+    priority: 100
+    scene:
+      description: "调查阶段开始"
+    script:
+      - speaker: "warden"
+        text_cn: "现在开始调查时间。你们有限的时间来收集证据。"
+      - speaker: "warden"
+        text_cn: "调查结束后，将召开【魔女审判】。"
+      - speaker: "warden"
+        text_cn: "找出凶手——也就是【魔女】，并将其处刑。"
+      - speaker: "narrator"
+        text_cn: "你可以调查现场、收集证据、询问其他人的证言..."
+    system_unlock:
+      - "evidence_collection"
+      - "testimony_collection"
+    investigation_limit: 5
+    next_phase: "investigation_active"
+
+  investigation_end:
+    id: "investigation_end"
+    name: "调查结束"
+    trigger:
+      type: "condition"
+      condition: "investigation_count_zero_or_time_expired"
+      phase: "investigation_active"
+    priority: 100
+    scene:
+      description: "调查时间结束"
+    script:
+      - speaker: "warden"
+        text_cn: "时间到。调查阶段结束。"
+      - speaker: "warden"
+        text_cn: "准备进入【魔女审判】。"
+    next_phase: "trial"
+
+  # ===========================================================================
+  # 审判阶段
+  # ===========================================================================
+
+  trial_start:
+    id: "trial_start"
+    name: "魔女审判开始"
+    trigger:
+      type: "auto"
+      phase: "trial"
+    priority: 100
+    scene:
+      location: "审判室"
+      required_characters: "all_alive"
+      description: "魔女审判开始"
+    script:
+      - speaker: "narrator"
+        text_cn: "所有幸存者被带到审判室。"
+      - speaker: "warden"
+        text_cn: "魔女审判现在开始。"
+      - speaker: "warden"
+        text_cn: "你们有一个小时的时间讨论，找出【魔女】——也就是凶手。"
+      - speaker: "warden"
+        text_cn: "讨论结束后，将进行投票。得票最多者将被处刑。"
+    system_unlock:
+      - "debate_system"
+      - "evidence_presentation"
+    next_phase: "trial_debate"
+
+  trial_vote:
+    id: "trial_vote"
+    name: "投票"
+    trigger:
+      type: "condition"
+      condition: "debate_finished"
+      phase: "trial_debate"
+    priority: 100
+    scene:
+      location: "审判室"
+      description: "投票时间"
+    script:
+      - speaker: "warden"
+        text_cn: "辩论时间结束。现在进行投票。"
+      - speaker: "warden"
+        text_cn: "选出你们认为的【魔女】。"
+      - speaker: "narrator"
+        text_cn: "所有人举起了手中的投票器..."
+    player_action: "select_suspect"
+
+  # ===========================================================================
+  # 处刑与结局分歧
+  # ===========================================================================
+
+  execution_correct:
+    id: "execution_correct"
+    name: "正确处刑"
+    trigger:
+      type: "condition"
+      condition: "vote_result_correct"
+    priority: 150
+    scene:
+      location: "处刑场"
+      description: "真凶被处刑"
+    script:
+      - speaker: "warden"
+        text_cn: "投票结果出来了。"
+      - speaker: "warden"
+        text_cn: "被选中的【魔女】是...${murderer_name}。"
+      - speaker: "${murderer_id}"
+        text_cn: "...是我做的。我无法控制自己..."
+      - speaker: "narrator"
+        text_cn: "处刑开始。一条生命就这样消逝了。"
+    outcomes:
+      "${murderer_id}":
+        status: "executed"
+      all:
+        stress: 20
+    next_event: "bad_end_murder_occurred"
+
+  bad_end_player_executed:
+    id: "bad_end_player"
+    name: "玩家被处刑"
+    trigger:
+      type: "condition"
+      condition: "vote_result_player"
+    priority: 300
+    scene:
+      location: "处刑场"
+      description: "你被判定为凶手..."
+    script:
+      - speaker: "warden"
+        text_cn: "投票结果出来了。"
+      - speaker: "warden"
+        text_cn: "被选中的【魔女】是...你。"
+      - speaker: "narrator"
+        text_cn: "什么？不对，凶手不是我...！"
+      - speaker: "narrator"
+        text_cn: "但没有人听你的辩解。看守们走上前来..."
+      - speaker: "narrator"
+        text_cn: "【BAD END - 冤罪处刑】"
+    game_over: true
+    ending_type: "bad_end"
+    ending_id: "wrongful_execution"
+
+  bad_end_innocent_executed:
+    id: "bad_end_innocent"
+    name: "无辜者被处刑"
+    trigger:
+      type: "condition"
+      condition: "vote_result_wrong"
+    priority: 300
+    scene:
+      location: "处刑场"
+      description: "无辜的人被处刑了..."
+    script:
+      - speaker: "warden"
+        text_cn: "投票结果出来了。"
+      - speaker: "warden"
+        text_cn: "被选中的【魔女】是...${voted_name}。"
+      - speaker: "${voted_id}"
+        text_cn: "不...不是我...我什么都没做...！"
+      - speaker: "narrator"
+        text_cn: "处刑执行了。一个无辜的生命消逝了。"
+      - speaker: "narrator"
+        text_cn: "而真正的凶手...还藏在你们之中。"
+      - speaker: "narrator"
+        text_cn: "【BAD END - 错误的正义】"
+    game_over: true
+    ending_type: "bad_end"
+    ending_id: "wrong_verdict"
+
+  bad_end_murder_occurred:
+    id: "bad_end_murder"
+    name: "发生了杀人事件"
+    trigger:
+      type: "after_event"
+      after: "execution_correct"
+    priority: 300
+    scene:
+      description: "即使找到了凶手，也有人死去了..."
+    script:
+      - speaker: "narrator"
+        text_cn: "审判结束了。凶手被处刑了。"
+      - speaker: "narrator"
+        text_cn: "但是...已经有人死去了。"
+      - speaker: "narrator"
+        text_cn: "这个结局，无法称之为胜利。"
+      - speaker: "narrator"
+        text_cn: "【BAD END - 无法挽回的悲剧】"
+    game_over: true
+    ending_type: "bad_end"
+    ending_id: "tragedy_occurred"
+
+  bad_end_player_witch:
+    id: "bad_end_witch"
+    name: "玩家魔女化"
+    trigger:
+      type: "condition"
+      condition: "player_madness_above_80"
+      any_phase: true
+    priority: 250
+    scene:
+      description: "你感到理智崩溃..."
+    script:
+      - speaker: "narrator"
+        text_cn: "黑暗从内心深处涌出..."
+      - speaker: "narrator"
+        text_cn: "你感到一股无法抑制的冲动，想要...杀人..."
+      - speaker: "narrator"
+        text_cn: "不...不要...！"
+      - speaker: "narrator"
+        text_cn: "但魔女因子已经完全觉醒。你无法控制自己了..."
+      - speaker: "narrator"
+        text_cn: "【BAD END - 魔女化】"
+    game_over: true
+    ending_type: "bad_end"
+    ending_id: "player_witchification"
+
+  # ===========================================================================
+  # Good End - 阻止悲剧
+  # ===========================================================================
+
+  good_end:
+    id: "good_end"
+    name: "Good End - 阻止悲剧"
+    trigger:
+      type: "condition"
+      condition: "day3_night_no_murder"
+      day: 3
+      phase: "night"
+    priority: 150
+    scene:
+      location: "牢房区"
+      description: "第三天的夜晚平安度过..."
+    script:
+      - speaker: "narrator"
+        text_cn: "第三天的夜晚...平安度过了。"
+      - speaker: "narrator"
+        text_cn: "没有人死去。你们成功阻止了悲剧的发生。"
+      - speaker: "warden"
+        text_cn: "哦？竟然没有人杀人吗..."
+      - speaker: "warden"
+        text_cn: "真是无趣呢。不过，实验数据也算收集完毕了。"
+      - speaker: "narrator"
+        text_cn: "接下来会发生什么，你不知道。"
+      - speaker: "narrator"
+        text_cn: "但至少...在这三天里，没有人因为你的选择而死去。"
+      - speaker: "narrator"
+        text_cn: "【GOOD END - 阻止悲剧】"
+    game_over: true
+    ending_type: "good_end"
+    ending_id: "tragedy_prevented"
+
+  # ===========================================================================
+  # True End - 觉醒与真相
+  # ===========================================================================
+
+  true_end_trigger:
+    id: "true_end_trigger"
+    name: "True End条件达成"
+    trigger:
+      type: "condition"
+      condition: "all_stress_70_to_85_and_library_clue_and_all_alive"
+      day: 3
+    priority: 180
+    scene:
+      description: "特殊条件达成..."
+    script:
+      - speaker: "narrator"
+        text_cn: "你感到有什么东西在觉醒..."
+      - speaker: "narrator"
+        text_cn: "所有人都处于极限状态...但没有人崩溃。"
+      - speaker: "narrator"
+        text_cn: "那本古书上的文字...你突然能够理解了。"
+    next_event: "true_end_revelation"
+
+  true_end_revelation:
+    id: "true_end_revelation"
+    name: "真相揭示"
+    trigger:
+      type: "after_event"
+      after: "true_end_trigger"
+    priority: 200
+    scene:
+      location: "图书室"
+      required_characters: "all"
+      description: "真相被发现了..."
+    script:
+      - speaker: "narrator"
+        text_cn: "你将所有人召集到图书室，展示了那本古书。"
+      - speaker: "narrator"
+        text_cn: "【大魔女召唤仪式】——需要13名魔女同时觉醒。"
+      - speaker: "narrator"
+        text_cn: "这一切...都是一个实验。一个召唤大魔女的仪式。"
+      - speaker: "narrator"
+        text_cn: "监牢的高压环境，是为了让你们加速魔女化..."
+      - speaker: "meruru"
+        text_cn: "...你发现了。"
+      - speaker: "narrator"
+        text_cn: "梅露露的声音变得冰冷。"
+      - speaker: "meruru"
+        text_cn: "没错，我是监牢的运营方。我的任务是找到隐藏的大魔女。"
+    next_event: "true_end_awakening"
+
+  true_end_awakening:
+    id: "true_end_awakening"
+    name: "集体觉醒"
+    trigger:
+      type: "after_event"
+      after: "true_end_revelation"
+    priority: 300
+    scene:
+      location: "庭院"
+      required_characters: "all"
+      description: "13人联合觉醒"
+    script:
+      - speaker: "narrator"
+        text_cn: "知道真相后，愤怒取代了恐惧。"
+      - speaker: "narrator"
+        text_cn: "你们不再是被操控的棋子。"
+      - speaker: "hiro"
+        text_cn: "既然都是魔女候补...那我们就一起觉醒吧。"
+      - speaker: "hiro"
+        text_cn: "不是被动地等待魔女化，而是主动地控制这股力量！"
+      - speaker: "narrator"
+        text_cn: "13人手牵手，形成一个圆环。"
+      - speaker: "narrator"
+        text_cn: "魔女因子在共鸣中觉醒...但这一次，不是失控的暴走。"
+      - speaker: "narrator"
+        text_cn: "而是有意识的、被驯服的力量。"
+      - speaker: "narrator"
+        text_cn: "你们打破了监牢的规则...打破了命运的牢笼。"
+      - speaker: "warden"
+        text_cn: "这...这不可能！"
+      - speaker: "narrator"
+        text_cn: "监牢开始崩塌。束缚你们的一切都在消失。"
+      - speaker: "narrator"
+        text_cn: "【TRUE END - 觉醒：打破命运】"
+    game_over: true
+    ending_type: "true_end"
+    ending_id: "collective_awakening"
+
+# =============================================================================
+# 系统配置
+# =============================================================================
+
+config:
+  game_length_days: 3
+  events_per_day_morning: 3
+  events_per_day_afternoon: 3
+  events_per_day_evening: 3
+  
+  murder_madness_threshold: 70
+  player_witch_madness_threshold: 80
+  true_end_stress_min: 70
+  true_end_stress_max: 85
+  
+  include_hiro_event: true
+  
+  special_characters:
+    cannot_be_murderer:
+      - "player"
+      - "meruru"
+    infiltrator:
+      - "meruru"

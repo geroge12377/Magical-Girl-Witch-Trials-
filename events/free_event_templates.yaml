@@ -1,0 +1,549 @@
+# ============================================================================
+# 自由事件模板 - 导演API可选择使用
+# ============================================================================
+# 导演在free_time阶段可以选择触发这些事件，或选择normal普通对话
+# 每个模板包含：触发条件、地点限制、角色槽位、结果选项
+# ============================================================================
+
+# ===================
+# 模板结构说明
+# ===================
+# id: 模板标识符
+# name_cn: 中文名称
+# description: 描述
+# trigger_conditions: 触发条件（代码检查）
+# location_filter: 适用地点（空=不限）
+# location_bonus: 特定地点加成
+# required_characters: 需要的角色数量
+# slots: 需要填充的变量槽位
+# outcome_options: 可能的结果及效果
+# ===================
+
+templates:
+
+  # ===========================================================================
+  # 角色互动类
+  # ===========================================================================
+
+  conflict:
+    id: "conflict"
+    name_cn: "角色冲突"
+    description: "两个角色发生争执或对立"
+    trigger_conditions:
+      - "characters_count >= 2"
+      - "any_character.stress > 30"
+    location_filter: ["cafeteria", "courtyard", "corridor"]
+    location_bonus:
+      cafeteria: "public_shame"      # 食堂冲突会被更多人看到
+      corridor: "quick_escalation"   # 走廊冲突容易升级
+    required_characters: 2
+    slots:
+      character_a:
+        type: "character_id"
+        filter: "stress > 30"
+      character_b:
+        type: "character_id"
+        filter: "stress > 20"
+      location:
+        type: "location_id"
+      reason:
+        type: "string"
+        examples: ["资源争夺", "过去恩怨", "误解", "嫉妒", "恐惧转移"]
+      intensity:
+        type: "enum"
+        values: ["low", "medium", "high"]
+    outcome_options:
+      - id: "both_stressed"
+        name_cn: "双方压力上升"
+        probability_weight: 0.4
+        effects:
+          "${character_a}": {stress: 10, madness: 2}
+          "${character_b}": {stress: 10, madness: 2}
+        witnesses_effect: {stress: 3}
+      - id: "one_yields"
+        name_cn: "一方退让"
+        probability_weight: 0.35
+        effects:
+          yielder: {stress: 5, affection_change: -5}
+          winner: {stress: -3}
+      - id: "third_party_intervenes"
+        name_cn: "第三者介入调停"
+        probability_weight: 0.25
+        condition: "witnesses >= 1"
+        effects:
+          "${character_a}": {stress: 3}
+          "${character_b}": {stress: 3}
+          intervener: {affection_from_both: 3, stress: 5}
+
+  approach:
+    id: "approach"
+    name_cn: "角色示好"
+    description: "角色主动接近玩家或其他角色"
+    trigger_conditions:
+      - "character.stress < 70"
+      - "character.affection_to_target > -10"
+    location_filter: ["cafeteria", "courtyard", "library", "cell_block"]
+    location_bonus:
+      library: "quiet_conversation"    # 图书室更适合深入交流
+      cell_block: "private_moment"     # 牢房区更私密
+    required_characters: 2
+    slots:
+      character:
+        type: "character_id"
+        filter: "stress < 70"
+      target:
+        type: "character_id_or_player"
+      location:
+        type: "location_id"
+      method:
+        type: "enum"
+        values: ["gift", "help", "talk", "comfort", "share_food", "offer_protection"]
+    outcome_options:
+      - id: "accepted"
+        name_cn: "示好被接受"
+        probability_weight: 0.5
+        effects:
+          "${character}": {stress: -5}
+          "${target}": {affection_to_character: 5}
+      - id: "rejected"
+        name_cn: "示好被拒绝"
+        probability_weight: 0.3
+        effects:
+          "${character}": {stress: 10, madness: 2}
+      - id: "misunderstood"
+        name_cn: "示好被误解"
+        probability_weight: 0.2
+        effects:
+          "${character}": {stress: 5}
+          "${target}": {affection_to_character: -3, suspicion: 5}
+
+  alliance:
+    id: "alliance"
+    name_cn: "结盟"
+    description: "角色之间形成同盟关系"
+    trigger_conditions:
+      - "character_a.affection_to_b > 10 OR common_enemy_exists"
+    location_filter: ["library", "cell_block", "courtyard"]
+    location_bonus:
+      library: "secret_pact"           # 图书室适合秘密结盟
+      cell_block: "survival_alliance"  # 牢房区的结盟更有生存意味
+    required_characters: 2
+    slots:
+      character_a:
+        type: "character_id"
+      character_b:
+        type: "character_id"
+      location:
+        type: "location_id"
+      purpose:
+        type: "string"
+        examples: ["互相保护", "调查真相", "对抗某人", "逃离监牢"]
+    outcome_options:
+      - id: "formed"
+        name_cn: "同盟成立"
+        probability_weight: 0.6
+        effects:
+          "${character_a}": {stress: -5, affection_to_b: 10}
+          "${character_b}": {stress: -5, affection_to_a: 10}
+        flags_set: ["alliance_${character_a}_${character_b}"]
+      - id: "suspicious"
+        name_cn: "半信半疑"
+        probability_weight: 0.4
+        effects:
+          "${character_a}": {stress: 3}
+          "${character_b}": {stress: 3}
+
+  # ===========================================================================
+  # 线索发现类
+  # ===========================================================================
+
+  discovery:
+    id: "discovery"
+    name_cn: "发现线索"
+    description: "角色发现关于监牢或其他角色的线索"
+    trigger_conditions:
+      - "location has clue_spots"
+    location_filter: ["library", "cell_block", "corridor", "courtyard"]
+    location_bonus:
+      library: "document_clue"         # 图书室多文献类线索
+      cell_block: "personal_clue"      # 牢房区多私人物品
+    required_characters: 1
+    slots:
+      character:
+        type: "character_id_or_player"
+      location:
+        type: "location_id"
+      clue_spot:
+        type: "clue_spot_id"
+        from: "location.clue_spots"
+      clue_type:
+        type: "enum"
+        values: ["diary", "item", "trace", "document", "memory"]
+      clue_content:
+        type: "string"
+        generated: true
+      importance:
+        type: "enum"
+        values: ["minor", "major", "critical"]
+    outcome_options:
+      - id: "personal_revelation"
+        name_cn: "触发角色回忆"
+        probability_weight: 0.3
+        condition: "clue relates to character"
+        effects:
+          "${character}": {stress: 5, madness: 3}
+        unlock_backstory: true
+      - id: "shared_info"
+        name_cn: "与玩家分享情报"
+        probability_weight: 0.4
+        condition: "character != player"
+        effects:
+          "${character}": {affection_to_player: 2}
+        add_to_evidence: true
+      - id: "hidden_secret"
+        name_cn: "角色隐瞒发现"
+        probability_weight: 0.3
+        condition: "character != player"
+        effects:
+          "${character}": {stress: 8, suspicion_from_others: 3}
+        hidden_clue: true
+
+  witness:
+    id: "witness"
+    name_cn: "目击可疑行为"
+    description: "角色目睹另一角色的可疑举动"
+    trigger_conditions:
+      - "characters_count >= 2"
+      - "target doing suspicious_action"
+    location_filter: ["corridor", "courtyard", "cell_block"]
+    location_bonus:
+      corridor: "passing_by"           # 走廊更容易偶遇
+      cell_block: "spying"             # 牢房区是偷窥
+    required_characters: 2
+    slots:
+      witness:
+        type: "character_id"
+      target:
+        type: "character_id"
+      action:
+        type: "string"
+        examples: ["深夜徘徊", "藏东西", "与某人密谈", "独自哭泣", "查看禁止区域"]
+      location:
+        type: "location_id"
+      time:
+        type: "time_period"
+    outcome_options:
+      - id: "confront"
+        name_cn: "当面质问"
+        probability_weight: 0.25
+        effects:
+          "${witness}": {stress: 5}
+          "${target}": {stress: 15, madness: 5}
+        public_event: true
+      - id: "report"
+        name_cn: "向玩家报告"
+        probability_weight: 0.35
+        effects:
+          "${witness}": {stress: 3, affection_to_player: 2}
+        add_to_evidence: true
+      - id: "ignore"
+        name_cn: "假装没看到"
+        probability_weight: 0.25
+        effects:
+          "${witness}": {stress: 8, madness: 2}
+      - id: "blackmail"
+        name_cn: "以此威胁"
+        probability_weight: 0.15
+        condition: "witness.madness > 20"
+        effects:
+          "${witness}": {madness: 5}
+          "${target}": {stress: 20, affection_to_witness: -15}
+
+  # ===========================================================================
+  # 情绪事件类
+  # ===========================================================================
+
+  breakdown:
+    id: "breakdown"
+    name_cn: "情绪爆发"
+    description: "角色压力过大导致情绪崩溃"
+    trigger_conditions:
+      - "character.stress > 70"
+    location_filter: []  # 任何地点
+    location_bonus:
+      cafeteria: "public_breakdown"    # 公开崩溃影响更大
+      cell_block: "private_breakdown"  # 私密崩溃更深入
+    required_characters: 1
+    slots:
+      character:
+        type: "character_id"
+        filter: "stress > 70"
+      location:
+        type: "location_id"
+      trigger_reason:
+        type: "string"
+        examples: ["回忆过去", "压力累积", "被人刺激", "噩梦惊醒", "听到坏消息"]
+      type:
+        type: "enum"
+        values: ["crying", "anger", "panic", "withdrawal", "hysteria"]
+    outcome_options:
+      - id: "comforted"
+        name_cn: "被安慰后平复"
+        probability_weight: 0.4
+        condition: "other_character_present AND other.affection > 0"
+        effects:
+          "${character}": {stress: -20, affection_to_comforter: 10}
+          comforter: {stress: 5, affection_from_character: 5}
+      - id: "isolated"
+        name_cn: "独自消化"
+        probability_weight: 0.35
+        effects:
+          "${character}": {stress: -5, madness: 5}
+      - id: "escalate"
+        name_cn: "情绪升级"
+        probability_weight: 0.25
+        effects:
+          "${character}": {stress: 10, madness: 10}
+        may_trigger: "bad_end_player_witch"
+
+  revelation:
+    id: "revelation"
+    name_cn: "秘密揭露"
+    description: "角色的hidden_truth被揭露"
+    trigger_conditions:
+      - "related_clue_found OR character.stress > 80"
+    location_filter: ["cafeteria", "trial_room"]
+    location_bonus:
+      cafeteria: "public_exposure"     # 公开揭露
+      trial_room: "formal_accusation"  # 正式指控
+    required_characters: 2
+    slots:
+      character:
+        type: "character_id"
+        filter: "has_hidden_truth"
+      secret:
+        type: "string"
+        from: "character.hidden_truth"
+      revealer:
+        type: "character_id_or_player"
+      location:
+        type: "location_id"
+      audience:
+        type: "character_id_list"
+    outcome_options:
+      - id: "denial"
+        name_cn: "否认"
+        probability_weight: 0.4
+        effects:
+          "${character}": {stress: 15, madness: 5, credibility: -10}
+      - id: "confession"
+        name_cn: "承认"
+        probability_weight: 0.35
+        effects:
+          "${character}": {stress: -10, madness: 3}
+        unlock_backstory: true
+      - id: "attack"
+        name_cn: "攻击揭露者"
+        probability_weight: 0.25
+        condition: "character.madness > 40"
+        effects:
+          "${character}": {madness: 15}
+          "${revealer}": {stress: 20}
+        may_trigger: "conflict"
+
+  # ===========================================================================
+  # 日常事件类
+  # ===========================================================================
+
+  normal:
+    id: "normal"
+    name_cn: "普通对话"
+    description: "无特殊事件的日常互动"
+    trigger_conditions: []  # 无条件，默认选项
+    location_filter: []  # 任何地点
+    location_bonus:
+      library: "deep_talk"
+      courtyard: "relaxed_talk"
+      cafeteria: "casual_talk"
+    required_characters: 2
+    slots:
+      character:
+        type: "character_id"
+      location:
+        type: "location_id"
+      topic:
+        type: "string"
+        examples: ["过去的生活", "对未来的担忧", "监牢的规则", "其他人的事", "魔法能力", "食物", "天气"]
+    outcome_options:
+      - id: "positive"
+        name_cn: "愉快交流"
+        probability_weight: 0.4
+        effects:
+          "${character}": {stress: -3, affection_to_player: 2}
+      - id: "neutral"
+        name_cn: "平淡交流"
+        probability_weight: 0.4
+        effects:
+          "${character}": {stress: 0}
+      - id: "negative"
+        name_cn: "不愉快交流"
+        probability_weight: 0.2
+        effects:
+          "${character}": {stress: 5, affection_to_player: -2}
+
+  meal_event:
+    id: "meal_event"
+    name_cn: "用餐事件"
+    description: "用餐时发生的小事件"
+    trigger_conditions:
+      - "phase in [lunch, dinner]"
+      - "location == cafeteria"
+    location_filter: ["cafeteria"]
+    required_characters: 3
+    slots:
+      main_character:
+        type: "character_id"
+      location:
+        type: "location_id"
+        fixed: "cafeteria"
+      event_type:
+        type: "enum"
+        values: ["food_sharing", "seat_dispute", "spilled_food", "group_conversation", "isolated_eating"]
+    outcome_options:
+      - id: "bonding"
+        name_cn: "增进感情"
+        probability_weight: 0.4
+        effects:
+          all_present: {stress: -2, affection_to_each_other: 1}
+      - id: "tension"
+        name_cn: "气氛紧张"
+        probability_weight: 0.3
+        effects:
+          all_present: {stress: 3}
+      - id: "incident"
+        name_cn: "发生小意外"
+        probability_weight: 0.3
+        effects:
+          "${main_character}": {stress: 5}
+        may_trigger: "conflict"
+
+  # ===========================================================================
+  # 特殊事件类
+  # ===========================================================================
+
+  secret_meeting:
+    id: "secret_meeting"
+    name_cn: "秘密会面"
+    description: "两个角色在隐蔽处秘密交谈"
+    trigger_conditions:
+      - "characters have alliance OR characters have secret"
+      - "phase == night OR location == cell_block"
+    location_filter: ["cell_block", "corridor"]
+    location_bonus:
+      cell_block: "complete_privacy"
+      corridor: "risk_of_discovery"
+    required_characters: 2
+    slots:
+      character_a:
+        type: "character_id"
+      character_b:
+        type: "character_id"
+      location:
+        type: "location_id"
+      topic:
+        type: "string"
+        examples: ["逃跑计划", "分享秘密", "讨论某人", "交换情报"]
+    outcome_options:
+      - id: "successful"
+        name_cn: "顺利交谈"
+        probability_weight: 0.5
+        effects:
+          "${character_a}": {affection_to_b: 5}
+          "${character_b}": {affection_to_a: 5}
+      - id: "overheard"
+        name_cn: "被人听到"
+        probability_weight: 0.3
+        effects:
+          "${character_a}": {stress: 10}
+          "${character_b}": {stress: 10}
+          eavesdropper: {suspicion: 10}
+        may_trigger: "witness"
+      - id: "interrupted"
+        name_cn: "被打断"
+        probability_weight: 0.2
+        effects:
+          "${character_a}": {stress: 5}
+          "${character_b}": {stress: 5}
+
+  nightmare:
+    id: "nightmare"
+    name_cn: "噩梦"
+    description: "角色做噩梦惊醒"
+    trigger_conditions:
+      - "phase == night"
+      - "character.stress > 50 OR character.madness > 30"
+    location_filter: ["cell_block"]
+    required_characters: 1
+    slots:
+      character:
+        type: "character_id"
+        filter: "stress > 50 OR madness > 30"
+      nightmare_content:
+        type: "string"
+        from: "character.trauma OR character.hidden_truth"
+    outcome_options:
+      - id: "alone"
+        name_cn: "独自承受"
+        probability_weight: 0.5
+        effects:
+          "${character}": {stress: 10, madness: 3}
+      - id: "neighbor_wakes"
+        name_cn: "吵醒邻居"
+        probability_weight: 0.3
+        condition: "neighbor_exists"
+        effects:
+          "${character}": {stress: 5}
+          neighbor: {stress: 3, affection_change: -2}
+      - id: "comforted_by_neighbor"
+        name_cn: "被邻居安慰"
+        probability_weight: 0.2
+        condition: "neighbor_exists AND neighbor.affection > 10"
+        effects:
+          "${character}": {stress: -5, affection_to_neighbor: 5}
+          neighbor: {stress: 3, affection_to_character: 3}
+
+# =============================================================================
+# 事件选择权重配置
+# =============================================================================
+
+selection_weights:
+  # 根据当前状态调整事件选择概率
+  high_stress_environment:    # 当平均stress > 50
+    conflict: 1.5
+    breakdown: 2.0
+    approach: 0.5
+    normal: 0.7
+    
+  low_stress_environment:     # 当平均stress < 30
+    conflict: 0.5
+    breakdown: 0.3
+    approach: 1.5
+    alliance: 1.3
+    normal: 1.2
+    
+  investigation_phase:
+    discovery: 2.0
+    witness: 1.5
+    secret_meeting: 1.3
+    normal: 0.5
+    
+  day1:                       # 第一天更多介绍性事件
+    approach: 1.5
+    normal: 1.5
+    conflict: 0.5
+    
+  day3:                       # 第三天更多紧张事件
+    conflict: 1.5
+    breakdown: 1.5
+    revelation: 1.5
+    witness: 1.3

@@ -1,0 +1,12 @@
+existing: {}
+
+potential:
+  noah:
+    type: victim_and_envy
+    hint: 第1周目因为嫉妒ノア是世界知名艺术家"バルーン"而杀害了她。
+  hiro:
+    type: from_hostility_to_partnership
+    hint: 第2周目成为了ヒロ最可靠的相棒，两人配合默契。
+  hannah:
+    type: object_of_envy_and_killer
+    hint: 遠野ハンナ对レイア抱有深深的劣等感，在第8章杀害了レイア。

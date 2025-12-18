@@ -1,0 +1,16 @@
+existing:
+  emma:
+    type: childhood_friend_complicated
+    status: 现在关系恶化
+    description: 小学时期的好友。曾经寻经常照顾经常失败的Emma，但后来开始怀疑Emma是否在故意失败来吸引注意。中学分班后关系疏远。在ユキ自杀后，寻将责任归咎于Emma的"傍观"，开始憎恨她。
+
+potential:
+  yuki:
+    type: deceased_friend
+    hint: 寻曾试图保护在学校被霸凌的ユキ。ユキ曾告诉寻"Emma将成为魔女"。ユキ的自杀是寻最大的心理创伤。
+  reia:
+    type: rival_to_companion
+    hint: 第二周目作为两位领导者有激烈的竞争和冲突，但随着相处加深，寻对Reia产生了深厚的感情。
+  meruru:
+    type: antagonist
+    hint: 牢屋敷的幕后黑手，真正的控制者。寻必须揭穿她才能接近真相。

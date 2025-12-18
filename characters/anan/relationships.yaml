@@ -1,0 +1,12 @@
+existing: {}
+
+potential:
+  noah:
+    type: close_friend
+    hint: 两人都是不太社交的类型，同为"風呂キャン"组合，房间相邻关系很好。
+  miria:
+    type: victim_and_misunderstanding
+    hint: アンアン在第2章杀死了ミリア，因为误以为ミリア想逃出牢屋敷。
+  emma:
+    type: from_hostility_to_reconciliation
+    hint: 第1周目视想要逃出去的Emma为敌人。但在第3周目与Emma和解。

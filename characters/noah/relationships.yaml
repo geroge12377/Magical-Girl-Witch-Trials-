@@ -1,0 +1,12 @@
+existing: {}
+
+potential:
+  anan:
+    type: close_friend
+    hint: 两人都是不太社交的类型，关系很好。ノア会给害怕的アンアン画おまじない来安抚她。
+  reia:
+    type: victim_and_killer
+    hint: レイア因为嫉妒ノア是世界知名艺术家"バルーン"，在第1章杀害了ノア。
+  hiro:
+    type: from_conflict_to_understanding
+    hint: 第2周目ヒロ需要照顾执着于绘画的ノア，两人从冲突走向理解。

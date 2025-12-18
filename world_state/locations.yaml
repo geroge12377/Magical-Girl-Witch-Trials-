@@ -1,0 +1,338 @@
+# ============================================================================
+# 地点系统 - 监牢地图定义
+# ============================================================================
+
+# ===================
+# 地点属性说明
+# ===================
+# id: 英文标识符
+# name_cn: 中文名称
+# description: 地点描述
+# capacity: 最大容纳人数
+# adjacent: 相邻地点列表（可直接移动）
+# available_phases: 可进入的时段（空=全时段）
+# locked: 是否锁定
+# unlock_condition: 解锁条件
+# available_actions: 可用行动
+# clue_spots: 可搜索的线索点
+# special_events: 绑定的特殊事件
+# atmosphere: 氛围标签（影响对话生成）
+# ===================
+
+locations:
+
+  # ===== 主要区域 =====
+
+  cafeteria:
+    id: "cafeteria"
+    name_cn: "食堂"
+    description: "所有人用餐的地方，长桌和木椅整齐排列。"
+    capacity: 13
+    adjacent: ["corridor", "courtyard"]
+    available_phases: []  # 全时段
+    locked: false
+    available_actions:
+      - "eat"
+      - "talk"
+      - "observe"
+      - "gather"
+    clue_spots:
+      - id: "kitchen_counter"
+        name_cn: "厨房柜台"
+        search_difficulty: "easy"
+        possible_clues: ["餐具", "食材记录"]
+      - id: "notice_board"
+        name_cn: "公告板"
+        search_difficulty: "easy"
+        possible_clues: ["规则说明", "日程表"]
+    special_events:
+      - "day1_morning_assembly"
+      - "day1_lunch"
+      - "day1_dinner"
+    atmosphere: ["public", "tense", "gathering"]
+    default_npcs: 3  # 默认有几个NPC在此
+
+  cell_block:
+    id: "cell_block"
+    name_cn: "牢房区"
+    description: "囚犯们的牢房所在区域，阴暗潮湿的走道两侧排列着铁门。"
+    capacity: 13
+    adjacent: ["corridor"]
+    available_phases: []
+    locked: false
+    available_actions:
+      - "rest"
+      - "talk"
+      - "search"
+      - "eavesdrop"
+    clue_spots:
+      - id: "under_bed"
+        name_cn: "床底"
+        search_difficulty: "medium"
+        possible_clues: ["私人物品", "隐藏的东西"]
+      - id: "wall_crack"
+        name_cn: "墙缝"
+        search_difficulty: "hard"
+        possible_clues: ["纸条", "刻痕"]
+      - id: "pillow"
+        name_cn: "枕头下"
+        search_difficulty: "easy"
+        possible_clues: ["日记", "信件"]
+    special_events:
+      - "day1_night"
+      - "day2_night"
+      - "day3_night"
+    atmosphere: ["private", "isolated", "dark"]
+    default_npcs: 2
+
+  library:
+    id: "library"
+    name_cn: "图书室"
+    description: "存放书籍的房间，灰尘弥漫，书架高耸。"
+    capacity: 5
+    adjacent: ["corridor"]
+    available_phases: ["morning", "free_time"]  # 夜间锁定
+    locked: false
+    available_actions:
+      - "read"
+      - "search"
+      - "talk"
+      - "study"
+    clue_spots:
+      - id: "bookshelf"
+        name_cn: "书架"
+        search_difficulty: "medium"
+        possible_clues: ["古书", "文献", "笔记"]
+      - id: "ancient_book"
+        name_cn: "落满灰尘的古书"
+        search_difficulty: "hard"
+        possible_clues: ["大魔女召唤仪式"]
+        special: true  # True End关键
+      - id: "desk_drawer"
+        name_cn: "书桌抽屉"
+        search_difficulty: "easy"
+        possible_clues: ["信件", "记录"]
+    special_events:
+      - "day2_library_clue"
+      - "true_end_revelation"
+    atmosphere: ["quiet", "mysterious", "knowledge"]
+    default_npcs: 1
+
+  courtyard:
+    id: "courtyard"
+    name_cn: "庭院"
+    description: "监牢内的露天庭院，四周高墙环绕，天空是唯一的出口。"
+    capacity: 10
+    adjacent: ["corridor", "cafeteria"]
+    available_phases: ["morning", "free_time"]  # 夜间禁止
+    locked: false
+    available_actions:
+      - "walk"
+      - "talk"
+      - "observe"
+      - "exercise"
+    clue_spots:
+      - id: "flower_bed"
+        name_cn: "花坛"
+        search_difficulty: "easy"
+        possible_clues: ["埋藏物品"]
+      - id: "wall_corner"
+        name_cn: "墙角"
+        search_difficulty: "medium"
+        possible_clues: ["刻痕", "暗号"]
+    special_events:
+      - "day2_magic_reveal"
+    atmosphere: ["open", "relief", "watched"]
+    default_npcs: 2
+
+  corridor:
+    id: "corridor"
+    name_cn: "走廊"
+    description: "连接各区域的走廊，冰冷的石壁上挂着昏暗的灯。"
+    capacity: 6
+    adjacent: ["cafeteria", "cell_block", "library", "courtyard", "trial_room", "warden_room", "basement"]
+    available_phases: []
+    locked: false
+    available_actions:
+      - "walk"
+      - "observe"
+      - "eavesdrop"
+    clue_spots:
+      - id: "wall_painting"
+        name_cn: "墙上的画"
+        search_difficulty: "hard"
+        possible_clues: ["隐藏信息"]
+    special_events: []
+    atmosphere: ["transition", "cold", "echo"]
+    default_npcs: 1
+
+  # ===== 特殊区域（有锁定条件）=====
+
+  trial_room:
+    id: "trial_room"
+    name_cn: "审判室"
+    description: "举行魔女审判的房间，圆形的空间中央是投票台。"
+    capacity: 13
+    adjacent: ["corridor", "execution_ground"]
+    available_phases: ["trial"]
+    locked: true
+    unlock_condition: "phase == trial"
+    available_actions:
+      - "debate"
+      - "present_evidence"
+      - "vote"
+      - "accuse"
+    clue_spots: []
+    special_events:
+      - "trial_start"
+      - "trial_vote"
+    atmosphere: ["formal", "pressure", "judgement"]
+    default_npcs: 0
+
+  execution_ground:
+    id: "execution_ground"
+    name_cn: "处刑场"
+    description: "执行处刑的地方，空气中弥漫着恐惧。"
+    capacity: 13
+    adjacent: ["trial_room"]
+    available_phases: ["execution"]
+    locked: true
+    unlock_condition: "after_trial_vote"
+    available_actions:
+      - "witness"
+    clue_spots: []
+    special_events:
+      - "execution_correct"
+      - "bad_end_player_executed"
+      - "bad_end_innocent_executed"
+    atmosphere: ["death", "fear", "finality"]
+    default_npcs: 0
+
+  warden_room:
+    id: "warden_room"
+    name_cn: "典狱长室"
+    description: "典狱长的房间，禁止囚犯进入。"
+    capacity: 2
+    adjacent: ["corridor"]
+    available_phases: []
+    locked: true
+    unlock_condition: "never"  # 玩家无法进入
+    available_actions: []
+    clue_spots:
+      - id: "warden_desk"
+        name_cn: "典狱长的桌子"
+        search_difficulty: "impossible"
+        possible_clues: ["监牢真相"]
+    special_events: []
+    atmosphere: ["forbidden", "authority", "secret"]
+    default_npcs: 0
+
+  # ===== 隐藏区域（特殊条件解锁）=====
+
+  basement:
+    id: "basement"
+    name_cn: "地下室"
+    description: "隐藏在监牢地下的神秘空间。"
+    capacity: 5
+    adjacent: ["corridor"]
+    available_phases: []
+    locked: true
+    unlock_condition: "flag_basement_discovered"
+    available_actions:
+      - "search"
+      - "investigate"
+    clue_spots:
+      - id: "ritual_circle"
+        name_cn: "仪式圆环"
+        search_difficulty: "hard"
+        possible_clues: ["召唤仪式痕迹", "魔女因子实验记录"]
+    special_events:
+      - "true_end_awakening"
+    atmosphere: ["hidden", "dark", "truth"]
+    default_npcs: 0
+
+# =============================================================================
+# 地点关系图（ASCII）
+# =============================================================================
+#
+#                    [典狱长室] (锁)
+#                         |
+#    [图书室] --- [走廊] --- [牢房区]
+#        |           |           
+#        |      [庭院]
+#        |           |
+#        +--- [食堂] -+
+#                   
+#              [审判室] (锁) --- [处刑场] (锁)
+#                   
+#              [地下室] (隐藏)
+#
+# =============================================================================
+
+# =============================================================================
+# 时段与地点可用性
+# =============================================================================
+
+phase_access:
+  dawn:
+    accessible: ["cell_block"]
+    locked: ["library", "courtyard", "trial_room", "execution_ground"]
+    
+  morning:
+    accessible: ["cafeteria", "cell_block", "library", "courtyard", "corridor"]
+    locked: ["trial_room", "execution_ground", "warden_room"]
+    
+  free_time:
+    accessible: ["cafeteria", "cell_block", "library", "courtyard", "corridor"]
+    locked: ["trial_room", "execution_ground", "warden_room"]
+    
+  night:
+    accessible: ["cell_block", "corridor"]
+    locked: ["cafeteria", "library", "courtyard", "trial_room", "execution_ground"]
+    curfew: true  # 宵禁，被发现在走廊会有惩罚
+    
+  investigation:
+    accessible: ["cafeteria", "cell_block", "library", "courtyard", "corridor"]
+    locked: ["trial_room", "execution_ground"]
+    special_access: ["crime_scene"]  # 案发现场特殊开放
+    
+  trial:
+    accessible: ["trial_room"]
+    locked: ["all_others"]
+    forced_gather: true  # 强制全员集合
+    
+  execution:
+    accessible: ["execution_ground"]
+    locked: ["all_others"]
+    forced_gather: true
+
+# =============================================================================
+# NPC位置分配规则
+# =============================================================================
+
+npc_distribution:
+  morning:
+    cafeteria: 0.5      # 50%概率在食堂
+    courtyard: 0.2
+    library: 0.1
+    cell_block: 0.15
+    corridor: 0.05
+    
+  free_time:
+    cafeteria: 0.25
+    courtyard: 0.25
+    library: 0.15
+    cell_block: 0.25
+    corridor: 0.1
+    
+  night:
+    cell_block: 0.95
+    corridor: 0.05     # 少数人可能违反宵禁
+    
+  # 角色偏好覆盖（优先于默认分配）
+  character_preferences:
+    nanoka: {library: 0.6}       # 奈叶香喜欢图书室
+    arisa: {courtyard: 0.5}      # 亚里沙喜欢庭院
+    noah: {cell_block: 0.7}      # 诺亚喜欢待在牢房
+    meruru: {cafeteria: 0.6}     # 梅露露喜欢在食堂
+    coco: {library: 0.5}         # 可可喜欢图书室

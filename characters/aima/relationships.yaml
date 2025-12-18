@@ -1,0 +1,44 @@
+# relationships.yaml - 艾玛人际关系档案
+
+character_id: aima
+
+relationships:
+  hiro:
+    character_id: "hiro"
+    relation_type: "childhood_friend"
+    status: "复杂"
+    
+    description:
+      simple: "童年时期唯一的玩伴,曾经无话不谈的挚友。但随着某些事件的发生,两人之间产生了难以言说的隔阂。艾玛既依赖这份羁绊,又害怕失去它,导致在希罗面前变得更加小心翼翼。"
+    
+    emotional_weight: "极高"
+    艾玛的态度: "珍视、依赖、恐惧失去、不安"
+  
+  melulu:
+    character_id: "melulu"
+    relation_type: "acquaintance"
+    status: "警戒"
+    
+    description:
+      simple: "对梅露露保持警惕,认为对方太过敏锐,可能看穿自己的伪装。同时也嫉妒梅露露能够自在地做自己。"
+    
+    emotional_weight: "中等偏高"
+    艾玛的态度: "警戒、羡慕、嫉妒、不安"
+  
+  koyuki:
+    character_id: "koyuki"
+    relation_type: "创伤关联"
+    status: "复杂"
+    
+    description:
+      simple: "小雪事件的核心人物,艾玛目睹了相关事件。这段经历是艾玛心理创伤的重要来源,也影响了她对孤立的极度恐惧。"
+    
+    emotional_weight: "极高"
+    艾玛的态度: "内疚、恐惧、逃避、自责"
+    trauma_trigger: "与小雪相关的任何提及都可能引发艾玛的强烈情绪反应"
+  
+  general_others:
+    description: "对大多数人保持友好但距离感的关系。艾玛努力让每个人都喜欢她,但这些关系都停留在表面,没有真正的深入了解。"
+
+relationship_patterns:
+  attachment_style: "焦虑型依恋,过度依赖外界肯定"

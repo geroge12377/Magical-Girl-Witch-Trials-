@@ -1,0 +1,14 @@
+{
+  "game_start_time": "2024-01-01T08:00:00",
+  "current_time": "2024-01-01T10:00:00",
+  "chapter": 1,
+  "day": 1,
+  "events": [],
+  "event_count": 0,
+  "last_event_id": 0,
+  "metadata": {
+    "version": "1.0",
+    "scenario": "魔法少女的魔女审判",
+    "description": "第一天早晨的放风时间,还没有发生任何案件"
+  }
+}
