@@ -475,5 +475,152 @@ python game_loop.py
 
 ---
 
-*文档版本：v1.0*
-*最后更新：2024-12-18*
+---
+
+## 十五、v3架构说明 - 两层导演系统
+
+### 架构概述
+
+v3版本引入了两层导演架构，将场景生成拆分为"规划"和"演出"两个独立层次：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     game_loop_v3.py                         │
+│  玩家输入 → 导演规划 → 角色演出 → 玩家选择 → 状态更新      │
+└─────────────────────────────────────────────────────────────┘
+                    │                │
+                    ▼                ▼
+         ┌──────────────────┐ ┌──────────────────┐
+         │ DirectorPlanner  │ │ CharacterActor   │
+         │ (导演规划层)      │ │ (角色演出层)      │
+         │                  │ │                  │
+         │ 输入:            │ │ 输入:            │
+         │ - 游戏状态       │ │ - Beat指令       │
+         │ - 在场角色       │ │ - 角色数据       │
+         │ - 地点信息       │ │ - 情绪目标       │
+         │                  │ │                  │
+         │ 输出:            │ │ 输出:            │
+         │ - ScenePlan      │ │ - DialogueOutput │
+         │ - 多个Beat       │ │ - 具体对话       │
+         │ - 玩家选择点     │ │ - 状态效果       │
+         └──────────────────┘ └──────────────────┘
+```
+
+### 新增文件结构
+
+```
+test_project/
+├── api/                          # 新增：API模块目录
+│   ├── __init__.py              # 模块导出
+│   ├── director_planner.py      # 导演规划层
+│   └── character_actor.py       # 角色演出层
+├── prompts/                      # 新增：Prompt模板目录
+│   ├── director_planner_prompt.txt  # 规划层prompt
+│   └── character_actor_prompt.txt   # 演出层prompt
+└── game_loop_v3.py              # 新增：v3游戏主循环
+```
+
+### 导演规划层 (DirectorPlanner)
+
+**职责**：
+1. 分析当前游戏状态和上下文
+2. 生成场景规划(ScenePlan)，包含多个Beat
+3. 为每个Beat指定参与角色、情绪目标、张力曲线
+4. 确定玩家选择点位置
+
+**核心数据结构**：
+
+```python
+@dataclass
+class Beat:
+    beat_id: str
+    beat_type: str  # opening/development/tension/climax/resolution
+    description: str
+    characters: List[str]
+    speaker_order: List[str]
+    emotion_targets: Dict[str, str]
+    tension_level: int  # 1-10
+    dialogue_count: int
+    direction_notes: str
+
+@dataclass
+class ScenePlan:
+    scene_id: str
+    scene_name: str
+    location: str
+    time_estimate_minutes: int  # 5-10分钟
+    beats: List[Beat]
+    overall_arc: str
+    key_moments: List[str]
+    player_choice_point: Optional[Dict]
+    outcomes: Dict[str, Any]
+    recommended_bgm: str
+```
+
+### 角色演出层 (CharacterActor)
+
+**职责**：
+1. 根据Beat指令生成具体对话
+2. 确保对话符合角色性格、口癖、说话方式
+3. 根据情绪目标和张力等级调整语气
+4. 预生成玩家选项的回应
+
+**核心数据结构**：
+
+```python
+@dataclass
+class DialogueLine:
+    speaker: str
+    text_cn: str
+    emotion: str
+    action: Optional[str]
+
+@dataclass
+class DialogueOutput:
+    beat_id: str
+    dialogue: List[DialogueLine]
+    effects: Dict[str, Any]
+
+@dataclass
+class ChoiceResponse:
+    choice_id: str
+    dialogue: List[DialogueLine]
+    effects: Dict[str, Any]
+```
+
+### 两层分离的优势
+
+| 优势 | 说明 |
+|-----|------|
+| 职责清晰 | 规划层负责"演什么"，演出层负责"怎么演" |
+| 可控性强 | 规划层输出可审核，便于调试和优化 |
+| 复用性高 | 同一个ScenePlan可以用不同风格演绎 |
+| 扩展性好 | 可独立升级规划或演出逻辑 |
+| 预生成 | 支持选项回应预生成，实现零延迟 |
+
+### 使用方式
+
+```bash
+# 运行v3版本
+cd test_project
+python game_loop_v3.py
+```
+
+### 与现有版本的关系
+
+| 版本 | 文件 | 架构 | 状态 |
+|-----|------|------|------|
+| v1 | game_loop.py | 单层导演 | 保留 |
+| v2 | game_loop_v2.py + director_api_v2.py | 事件驱动 | 保留 |
+| v3 | game_loop_v3.py + api/ | 两层导演 | **新增** |
+
+所有版本共享相同的数据格式：
+- `characters/*.yaml` - 角色数据
+- `world_state/*.json` - 状态数据
+- `events/*.yaml` - 事件定义
+- `config.py` - API配置
+
+---
+
+*文档版本：v1.1*
+*最后更新：2024-12-20*
