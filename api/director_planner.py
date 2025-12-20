@@ -11,7 +11,6 @@
 import anthropic
 import json
 import yaml
-import re
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -20,6 +19,9 @@ import sys
 # 添加父目录到路径以导入config
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import get_api_key, MODEL, MAX_TOKENS
+
+# 导入公共工具函数
+from .utils import clean_json_response, fix_truncated_json, parse_json_with_diagnostics
 
 
 # ============================================================================
@@ -66,101 +68,6 @@ def load_json(filepath: str) -> dict:
 def load_yaml(filepath: str) -> dict:
     with open(filepath, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
-
-def clean_json_response(text: str) -> str:
-    """清理API返回的JSON，处理各种常见问题"""
-    text = text.strip()
-
-    # 1. 移除 markdown 代码块
-    if text.startswith('```json'):
-        text = text[7:]
-    elif text.startswith('```'):
-        text = text[3:]
-    if text.endswith('```'):
-        text = text[:-3]
-    text = text.strip()
-
-    # 2. 用正则提取 JSON 对象（处理前后可能有的额外文字）
-    json_match = re.search(r'\{[\s\S]*\}', text)
-    if json_match:
-        text = json_match.group()
-
-    # 3. 处理中文引号
-    text = text.replace('"', '"').replace('"', '"')  # 中文双引号
-    text = text.replace(''', "'").replace(''', "'")  # 中文单引号
-    text = text.replace('：', ':')  # 中文冒号
-
-    # 4. 处理尾部逗号（JSON 不允许）
-    # 处理 ,] 和 ,} 的情况
-    text = re.sub(r',(\s*[\]\}])', r'\1', text)
-
-    return text
-
-
-def fix_truncated_json(text: str) -> str:
-    """修复被截断的 JSON，尝试补全缺失的括号"""
-    # 计算括号平衡
-    open_braces = text.count('{')
-    close_braces = text.count('}')
-    open_brackets = text.count('[')
-    close_brackets = text.count(']')
-
-    # 如果不平衡，尝试修复
-    if open_braces != close_braces or open_brackets != close_brackets:
-        print(f"[DirectorPlanner] 检测到 JSON 截断: {{ 有 {open_braces} 个, }} 有 {close_braces} 个, [ 有 {open_brackets} 个, ] 有 {close_brackets} 个")
-
-        # 检查是否在字符串中间被截断（寻找未闭合的引号）
-        # 简单处理：如果最后一个字符不是 } 或 ]，尝试修复
-        text = text.rstrip()
-
-        # 如果在字符串中截断，先尝试闭合字符串
-        if text.count('"') % 2 != 0:
-            text += '"'
-
-        # 补全缺失的括号
-        missing_brackets = open_brackets - close_brackets
-        missing_braces = open_braces - close_braces
-
-        # 按照 JSON 结构，通常是先闭合 ]，再闭合 }
-        if missing_brackets > 0:
-            text += ']' * missing_brackets
-        if missing_braces > 0:
-            text += '}' * missing_braces
-
-        print(f"[DirectorPlanner] 已尝试补全 JSON 括号")
-
-    return text
-
-
-def parse_json_with_diagnostics(text: str, context_name: str = "JSON") -> dict:
-    """带诊断信息的 JSON 解析"""
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        # 打印错误诊断信息
-        print(f"\n[DirectorPlanner] ❌ {context_name} 解析失败")
-        print(f"[DirectorPlanner] 错误类型: {e.msg}")
-        print(f"[DirectorPlanner] 错误位置: 第 {e.lineno} 行, 第 {e.colno} 列 (字符位置 {e.pos})")
-
-        # 显示错误位置附近的文本
-        start = max(0, e.pos - 50)
-        end = min(len(text), e.pos + 50)
-        context_text = text[start:end]
-
-        # 标记错误位置
-        error_marker_pos = e.pos - start
-        print(f"[DirectorPlanner] 错误附近内容:")
-        print(f"  ...{context_text}...")
-        print(f"  {' ' * (error_marker_pos + 3)}^ 错误在这里")
-
-        # 打印原始响应的前500个字符
-        print(f"\n[DirectorPlanner] 原始响应前500字符:")
-        print(text[:500])
-        if len(text) > 500:
-            print(f"... (共 {len(text)} 字符)")
-
-        raise
-
 
 # ============================================================================
 # 导演规划层
@@ -295,14 +202,8 @@ class DirectorPlanner:
             raw_text = response.content[0].text
             print(f"[DirectorPlanner] API 响应长度: {len(raw_text)} 字符")
 
-            # 清理 JSON
-            cleaned_text = clean_json_response(raw_text)
-
-            # 尝试修复截断
-            cleaned_text = fix_truncated_json(cleaned_text)
-
-            # 带诊断的解析
-            result = parse_json_with_diagnostics(cleaned_text, "场景规划")
+            # 使用公共函数解析 JSON（三次尝试：原始→清理→修复）
+            result = parse_json_with_diagnostics(raw_text, "场景规划", "DirectorPlanner")
             return self._parse_scene_plan(result, location)
 
         except json.JSONDecodeError as e:

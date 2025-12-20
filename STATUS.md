@@ -1,22 +1,33 @@
 # 项目状态追踪
 
-> 最后更新：2025-12-20
+> 最后更新：2025-12-21
 
 ---
 
 ## 更新日志
 
+### 2025-12-21 - JSON 解析公共模块整合
+
+**修复文件**: `api/character_actor.py`
+
+1. **移除本地 clean_json_response()**: 删除了简单版实现
+2. **导入公共模块**: 添加 `from .utils import parse_json_with_diagnostics`
+3. **修改 generate_dialogue_for_beat()**: 使用 `parse_json_with_diagnostics()` 替代 `json.loads(clean_json_response(...))`
+4. **修改 generate_choice_responses()**: 同上
+5. **改进错误处理**: 分离 JSONDecodeError 和其他异常，使用回退逻辑
+
+**现在 director_planner.py 和 character_actor.py 使用相同的 JSON 解析逻辑**
+
 ### 2025-12-20 - JSON 解析错误修复
 
-**修复文件**: `api/director_planner.py`
+**修复文件**: `api/director_planner.py`, `api/utils.py`
 
 1. **增加 max_tokens**: 从 2048 → 4096，防止响应被截断
-2. **改进 clean_json_response()**:
-   - 使用正则提取 JSON 对象
-   - 处理中文引号 `""` → `""`
-   - 移除尾部逗号
-3. **新增 fix_truncated_json()**: 自动补全被截断的 JSON 括号
-4. **新增 parse_json_with_diagnostics()**: 解析失败时打印详细诊断信息
+2. **创建公共模块 api/utils.py**:
+   - `clean_json_response()`: 正则提取JSON、处理中文引号、移除尾部逗号
+   - `fix_truncated_json()`: 自动补全被截断的 JSON 括号
+   - `parse_json_with_diagnostics()`: 三次尝试解析（原始→清理→修复）
+3. **重构 director_planner.py**: 使用公共模块
 
 ---
 

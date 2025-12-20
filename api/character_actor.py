@@ -23,6 +23,9 @@ from config import get_api_key, MODEL, MAX_TOKENS
 # 导入Beat类型
 from .director_planner import Beat, ScenePlan
 
+# 导入公共工具函数
+from .utils import parse_json_with_diagnostics
+
 
 # ============================================================================
 # 数据类
@@ -63,16 +66,6 @@ def load_yaml(filepath: str) -> dict:
     with open(filepath, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
-def clean_json_response(text: str) -> str:
-    """清理API返回的JSON"""
-    text = text.strip()
-    if text.startswith('```json'):
-        text = text[7:]
-    elif text.startswith('```'):
-        text = text[3:]
-    if text.endswith('```'):
-        text = text[:-3]
-    return text.strip()
 
 
 # ============================================================================
@@ -200,11 +193,16 @@ class CharacterActor:
                 messages=[{"role": "user", "content": prompt}]
             )
 
-            result = json.loads(clean_json_response(response.content[0].text))
+            raw_text = response.content[0].text
+            # 使用公共函数解析 JSON（三次尝试：原始→清理→修复）
+            result = parse_json_with_diagnostics(raw_text, "对话生成", "CharacterActor")
             return self._parse_dialogue_output(beat.beat_id, result)
 
+        except json.JSONDecodeError as e:
+            print(f"[CharacterActor] JSON 解析最终失败，使用回退对话")
+            return self._create_fallback_dialogue(beat, characters_info)
         except Exception as e:
-            print(f"[CharacterActor] API调用失败: {e}")
+            print(f"[CharacterActor] API调用失败: {type(e).__name__}: {e}")
             return self._create_fallback_dialogue(beat, characters_info)
 
     def generate_choice_responses(
@@ -236,11 +234,16 @@ class CharacterActor:
                 messages=[{"role": "user", "content": prompt}]
             )
 
-            result = json.loads(clean_json_response(response.content[0].text))
+            raw_text = response.content[0].text
+            # 使用公共函数解析 JSON（三次尝试：原始→清理→修复）
+            result = parse_json_with_diagnostics(raw_text, "选项回应", "CharacterActor")
             return self._parse_choice_responses(result)
 
+        except json.JSONDecodeError as e:
+            print(f"[CharacterActor] JSON 解析最终失败，使用回退回应")
+            return self._create_fallback_responses(choice_point, main_char)
         except Exception as e:
-            print(f"[CharacterActor] 预生成回应失败: {e}")
+            print(f"[CharacterActor] 预生成回应失败: {type(e).__name__}: {e}")
             return self._create_fallback_responses(choice_point, main_char)
 
     def _build_actor_prompt(self, beat: Beat, characters_info: Dict) -> str:
