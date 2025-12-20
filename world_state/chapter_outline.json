@@ -1,0 +1,57 @@
+{
+  "chapter": 1,
+  "title": "孤岛的第一章 - 猜疑与试探",
+  "overall_theme": "13名少女被困孤岛，在恐惧与猜疑中寻找出路",
+  "days": [
+    {
+      "day": 1,
+      "theme": "初次相遇与探索",
+      "key_events": [
+        "少女们在食堂相遇，互相自我介绍",
+        "探索监牢环境，发现各个区域",
+        "第一次紧张对话，发现有人在隐瞒什么",
+        "夜间有人独自行动",
+        "建立初步的小团体"
+      ],
+      "tension_arc": "低→中 (1-4)",
+      "potential_murder": false,
+      "notes": "让玩家熟悉角色性格和环境，埋下伏笔"
+    },
+    {
+      "day": 2,
+      "theme": "矛盾激化",
+      "key_events": [
+        "发现可疑线索",
+        "角色之间产生明显冲突",
+        "有人情绪崩溃",
+        "秘密被部分揭露",
+        "高压力角色可能采取行动"
+      ],
+      "tension_arc": "中→高 (4-7)",
+      "potential_murder": true,
+      "notes": "制造紧张氛围，为可能的杀人事件做铺垫"
+    },
+    {
+      "day": 3,
+      "theme": "真相与审判",
+      "key_events": [
+        "决定性事件发生",
+        "真相开始浮出水面",
+        "玩家面临关键选择",
+        "如有杀人则进行审判",
+        "走向不同结局"
+      ],
+      "tension_arc": "高→结局 (7-10)",
+      "potential_murder": false,
+      "notes": "根据玩家选择走向不同结局"
+    }
+  ],
+  "ending_flags": {
+    "murder_occurred": false,
+    "correct_judgment": null,
+    "library_secret_found": false,
+    "all_high_affection": false
+  },
+  "generated_at": "2025-12-21",
+  "version": "1.0"
+}

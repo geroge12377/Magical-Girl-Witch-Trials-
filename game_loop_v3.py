@@ -1,8 +1,8 @@
 # ============================================================================
-# 游戏主循环 v3 - 两层导演架构
+# 游戏主循环 v3 - 两层导演架构 + 故事规划系统
 # ============================================================================
-# 架构：导演规划层(DirectorPlanner) + 角色演出层(CharacterActor)
-# 流程：导演规划 → 角色演出 → 玩家选择 → 状态更新
+# 架构：故事规划层 + 导演规划层 + 角色演出层
+# 流程：大纲检查 → 导演规划 → 角色演出 → 玩家选择 → 状态更新 → 结局判定
 # ============================================================================
 
 import json
@@ -11,8 +11,9 @@ import random
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-# 导入新的API模块
+# 导入API模块
 from api import DirectorPlanner, CharacterActor, ScenePlan, Beat, DialogueOutput
+from api import StoryPlanner, EndingType
 from config import get_api_key, MODEL, OUTPUT_DIR
 
 
@@ -118,23 +119,34 @@ def display_beat_info(beat: Beat, beat_index: int):
     print(f"   {beat.description[:60]}...")
     print(f"   张力: {'▓' * beat.tension_level}{'░' * (10 - beat.tension_level)} {beat.tension_level}/10")
 
-def display_dialogue(dialogue_output: DialogueOutput):
-    """显示对话"""
+def display_dialogue(dialogue_output: DialogueOutput, show_jp: bool = False):
+    """
+    显示对话（双语支持）
+
+    Args:
+        dialogue_output: 对话输出
+        show_jp: 是否同时显示日文（用于调试TTS）
+    """
     print("\n" + "-" * 50)
 
     for line in dialogue_output.dialogue:
         speaker = line.speaker
-        text = line.text_cn
+        text_cn = line.text_cn
+        text_jp = line.text_jp
         emotion = line.emotion
         action = line.action
 
         if speaker == "narrator":
-            print(f"\n  {text}")
+            print(f"\n  {text_cn}")
+            if show_jp and text_jp != text_cn:
+                print(f"  [JP] {text_jp}")
         else:
             emotion_mark = f" [{emotion}]" if emotion else ""
             action_mark = f" *{action}*" if action else ""
             print(f"\n【{speaker}{emotion_mark}】{action_mark}")
-            print(f"  「{text}」")
+            print(f"  「{text_cn}」")
+            if show_jp and text_jp:
+                print(f"  [TTS] 「{text_jp}」")
 
 def display_choices(choice_point: Dict):
     """显示选项"""
@@ -184,18 +196,20 @@ def display_location_menu(locations: dict, current_phase: str):
 # ============================================================================
 
 class GameLoopV3:
-    """游戏主循环 v3 - 两层导演架构"""
+    """游戏主循环 v3 - 三层架构（故事规划 + 导演规划 + 角色演出）"""
 
     def __init__(self):
         self.project_root = Path(__file__).parent
-        self.planner = DirectorPlanner(self.project_root)
-        self.actor = CharacterActor(self.project_root)
+        self.story_planner = StoryPlanner(self.project_root)  # 故事规划层
+        self.planner = DirectorPlanner(self.project_root)      # 导演规划层
+        self.actor = CharacterActor(self.project_root)         # 角色演出层
         self.locations = load_yaml(self.project_root / "world_state" / "locations.yaml")
 
         self.player_location = "牢房区"
         self.running = True
         self.current_scene_plan: Optional[ScenePlan] = None
         self.pregenerated_responses: Dict = {}
+        self.show_jp_text = False  # 是否显示日文（调试用）
 
     def run(self):
         """运行游戏"""
@@ -278,7 +292,7 @@ class GameLoopV3:
             # 显示对话（从预生成的列表中获取）
             if i < len(all_dialogues):
                 dialogue_output = all_dialogues[i]
-                display_dialogue(dialogue_output)
+                display_dialogue(dialogue_output, self.show_jp_text)
                 # 应用效果
                 self._apply_dialogue_effects(dialogue_output)
 

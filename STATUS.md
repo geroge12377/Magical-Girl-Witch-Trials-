@@ -6,6 +6,41 @@
 
 ## 更新日志
 
+### 2025-12-21 - 故事规划层 + 双语输出系统
+
+**新增文件**: `api/story_planner.py`, `world_state/chapter_outline.json`, `world_state/murder_prep.json`
+**修改文件**: `api/character_actor.py`, `api/__init__.py`, `game_loop_v3.py`, `prompts/character_actor_prompt.txt`
+
+**架构升级**: 从两层导演架构升级为三层架构
+```
+旧: DirectorPlanner → CharacterActor
+新: StoryPlanner → DirectorPlanner → CharacterActor
+```
+
+**1. 故事规划层 (api/story_planner.py)**:
+- `StoryPlanner` 类：管理章节大纲和结局判定
+- `generate_three_day_outline()`: 生成三天事件大纲
+- `get_day_events(day)`: 获取指定日期的事件列表
+- `check_murder_prep()`: 检查杀人准备状态
+- `check_ending()`: 判定四种结局类型
+- `EndingType` 常量：BAD_END / NORMAL_END / GOOD_END / TRUE_END
+
+**2. 双语输出系统**:
+- `DialogueLine` 新增 `text_jp` 字段
+- `text_cn`: 中文显示文本（第一人称统一用「我」）
+- `text_jp`: 日文TTS文本（保留角色口癖）
+- `display_dialogue()` 支持 `show_jp` 参数显示日文
+
+**3. 结局判定规则**:
+- **Bad End**: 审判错误（投票处死无辜者）
+- **Normal End**: 杀人发生 + 审判正确
+- **Good End**: 无人死亡
+- **True End**: 全员好感 ≥ 70 + 发现图书馆秘密
+
+**4. 新增数据文件**:
+- `world_state/chapter_outline.json`: 三天大纲规划
+- `world_state/murder_prep.json`: 杀人准备状态追踪
+
 ### 2025-12-21 - 场景对话批量生成重构
 
 **修改文件**: `api/character_actor.py`, `game_loop_v3.py`
@@ -71,12 +106,13 @@
 
 | 模块 | 文件 | 状态 | 说明 |
 |------|------|:----:|------|
+| 故事规划层 | `api/story_planner.py` | ✅ | 三天大纲 + 结局判定 |
 | 导演规划层 | `api/director_planner.py` | ✅ | 生成ScenePlan，包含多个Beat |
-| 角色演出层 | `api/character_actor.py` | ✅ | 根据Beat生成对话 |
+| 角色演出层 | `api/character_actor.py` | ✅ | 根据Beat生成对话（双语输出） |
 | API模块导出 | `api/__init__.py` | ✅ | 导出核心类 |
-| v3游戏循环 | `game_loop_v3.py` | ✅ | 两层导演架构主循环 |
+| v3游戏循环 | `game_loop_v3.py` | ✅ | 三层架构主循环 |
 | 规划层Prompt | `prompts/director_planner_prompt.txt` | ✅ | 规划层prompt模板 |
-| 演出层Prompt | `prompts/character_actor_prompt.txt` | ✅ | 演出层prompt模板 |
+| 演出层Prompt | `prompts/character_actor_prompt.txt` | ✅ | 演出层prompt模板（双语） |
 
 ### 现有模块
 
@@ -186,14 +222,71 @@ class DirectorPlanner:
 
 ---
 
+### api/story_planner.py
+
+```python
+class EndingType:
+    """结局类型常量"""
+    BAD_END = "bad_end"          # 审判错误（投票处死无辜者）
+    NORMAL_END = "normal_end"    # 杀人 + 审判正确
+    GOOD_END = "good_end"        # 无人死亡
+    TRUE_END = "true_end"        # 全员好感 ≥ 70 + library_secret_found
+
+@dataclass
+class DayOutline:
+    """单日大纲"""
+    day: int
+    theme: str
+    key_events: List[str]
+    tension_arc: str
+    potential_murder: bool
+    notes: str
+
+@dataclass
+class ChapterOutline:
+    """章节大纲"""
+    chapter: int
+    title: str
+    days: List[DayOutline]
+    overall_theme: str
+    ending_flags: Dict[str, bool]
+
+class StoryPlanner:
+    """故事规划层"""
+
+    def __init__(self, project_root: Path = None)
+        """初始化"""
+
+    def generate_three_day_outline(self) -> Dict
+        """生成三天大纲"""
+
+    def get_day_events(self, day: int) -> List[str]
+        """获取指定日期的事件列表"""
+
+    def check_murder_prep(self) -> Optional[Dict]
+        """检查杀人准备状态"""
+
+    def update_murder_prep(self, char_id, target_id, motivation, progress)
+        """更新杀人准备状态"""
+
+    def check_ending(self) -> str
+        """检查当前状态应触发的结局类型"""
+
+    def get_ending_description(self, ending_type: str) -> Dict[str, str]
+        """获取结局描述"""
+```
+
+---
+
 ### api/character_actor.py
 
 ```python
 @dataclass
 class DialogueLine:
-    """单行对话"""
+    """单行对话（双语）"""
     speaker: str                   # 角色ID或"narrator"
-    text_cn: str                   # 中文对话
+    text_cn: str                   # 中文对话（显示用，第一人称统一「我」）
+    text_jp: str                   # 日文对话（TTS用，保留原口癖）
     emotion: str                   # 情绪
     action: Optional[str] = None   # 伴随动作
 
@@ -386,15 +479,20 @@ def display_time(project_root: Path)
 def display_world_state(project_root: Path)
 def display_scene_plan(scene_plan: ScenePlan)
 def display_beat_info(beat: Beat, beat_index: int)
-def display_dialogue(dialogue_output: DialogueOutput)
+def display_dialogue(dialogue_output: DialogueOutput, show_jp: bool = False)
+    """显示对话（双语支持，show_jp=True时显示日文TTS文本）"""
 def display_choices(choice_point: Dict)
 def display_location_menu(locations: dict, current_phase: str)
 
 class GameLoopV3:
-    """游戏主循环 v3 - 两层导演架构"""
+    """游戏主循环 v3 - 三层架构（故事规划 + 导演规划 + 角色演出）"""
 
     def __init__(self)
-        """初始化 DirectorPlanner 和 CharacterActor"""
+        """初始化 StoryPlanner, DirectorPlanner, CharacterActor"""
+        self.story_planner = StoryPlanner(...)   # 故事规划层
+        self.planner = DirectorPlanner(...)      # 导演规划层
+        self.actor = CharacterActor(...)         # 角色演出层
+        self.show_jp_text = False                # 是否显示日文
 
     def run(self)
         """运行游戏"""
@@ -479,7 +577,7 @@ def main()
 
 ## 三、数据流向图
 
-### v3 两层导演架构数据流
+### v3 三层架构数据流（故事规划 + 导演规划 + 角色演出）
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -598,6 +696,10 @@ def main()
 │  │   {day, time, phase, event_count, flags, triggered_events}           │
 │  ├── character_states.json  ← 13人实时状态                              │
 │  │   {char_id: {stress, madness, emotion, location, action, ...}}       │
+│  ├── chapter_outline.json   ← 三天大纲规划（故事规划层生成）            │
+│  │   {chapter, title, days: [{day, theme, key_events, ...}]}            │
+│  ├── murder_prep.json       ← 杀人准备状态追踪                          │
+│  │   {active, killer_id, target_id, motivation, progress, can_execute}  │
 │  ├── locations.yaml         ← 地点信息                                  │
 │  ├── events_log.json        ← 事件日志                                  │
 │  └── pending_events.json    ← 待处理事件                                │
@@ -615,10 +717,13 @@ def main()
 
 | 特性 | v1 (game_loop.py) | v2 (game_loop_v2.py) | v3 (game_loop_v3.py) |
 |------|:-----------------:|:--------------------:|:--------------------:|
-| 架构 | 单层导演 | 事件驱动 | 两层导演 |
+| 架构 | 单层导演 | 事件驱动 | 三层架构 |
 | 场景规划 | 无 | 事件模板 | ScenePlan + Beat |
+| 故事大纲 | 无 | 无 | 三天大纲规划 |
 | 对话生成 | 单次API调用 | 单次API调用 | 分层API调用 |
+| 双语输出 | 无 | 无 | ✅ (text_cn + text_jp) |
 | 张力控制 | 无 | 无 | 1-10等级 |
+| 结局系统 | 无 | 简单 | 4种结局类型 |
 | 预生成回应 | ✅ | ✅ | ✅ |
 | 固定事件 | 无 | ✅ | 兼容 |
 | 自由事件 | 无 | ✅ | 兼容 |
@@ -649,4 +754,4 @@ python test_director_api.py    # 导演API测试
 
 ---
 
-*状态更新日期：2025-12-20*
+*状态更新日期：2025-12-21*

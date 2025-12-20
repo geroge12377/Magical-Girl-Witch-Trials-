@@ -33,9 +33,10 @@ from .utils import parse_json_with_diagnostics
 
 @dataclass
 class DialogueLine:
-    """单行对话"""
+    """单行对话（双语）"""
     speaker: str  # 角色ID或"narrator"
-    text_cn: str  # 中文对话
+    text_cn: str  # 中文对话（显示用，第一人称统一用「我」）
+    text_jp: str  # 日文对话（TTS用，保留原口癖）
     emotion: str  # 情绪
     action: Optional[str] = None  # 伴随动作（可选）
 
@@ -160,6 +161,7 @@ class CharacterActor:
                 dialogue=[DialogueLine(
                     speaker="narrator",
                     text_cn="四周静悄悄的...",
+                    text_jp="辺りは静まり返っている...",
                     emotion="neutral"
                 )],
                 effects={}
@@ -361,12 +363,15 @@ class CharacterActor:
         return prompt
 
     def _parse_dialogue_output(self, beat_id: str, result: Dict) -> DialogueOutput:
-        """解析对话输出"""
+        """解析对话输出（双语）"""
         dialogue = []
         for line in result.get("dialogue", []):
+            text_cn = line.get("text_cn", "...")
+            text_jp = line.get("text_jp", text_cn)  # 如果没有日文，使用中文
             dialogue.append(DialogueLine(
                 speaker=line.get("speaker", "narrator"),
-                text_cn=line.get("text_cn", "..."),
+                text_cn=text_cn,
+                text_jp=text_jp,
                 emotion=line.get("emotion", "neutral"),
                 action=line.get("action")
             ))
@@ -378,7 +383,7 @@ class CharacterActor:
         )
 
     def _parse_choice_responses(self, result: Dict) -> Dict[str, ChoiceResponse]:
-        """解析选项回应"""
+        """解析选项回应（双语）"""
         responses = {}
 
         for choice_id in ["A", "B", "C"]:
@@ -386,9 +391,12 @@ class CharacterActor:
                 choice_data = result[choice_id]
                 dialogue = []
                 for line in choice_data.get("dialogue", []):
+                    text_cn = line.get("text_cn", "...")
+                    text_jp = line.get("text_jp", text_cn)
                     dialogue.append(DialogueLine(
                         speaker=line.get("speaker", "unknown"),
-                        text_cn=line.get("text_cn", "..."),
+                        text_cn=text_cn,
+                        text_jp=text_jp,
                         emotion=line.get("emotion", "neutral"),
                         action=line.get("action")
                     ))
@@ -410,6 +418,7 @@ class CharacterActor:
                 dialogue.append(DialogueLine(
                     speaker="narrator",
                     text_cn="...",
+                    text_jp="...",
                     emotion="neutral"
                 ))
             elif speaker in characters_info:
@@ -417,12 +426,13 @@ class CharacterActor:
                 dialogue.append(DialogueLine(
                     speaker=speaker,
                     text_cn="......",
+                    text_jp="......",
                     emotion=info.get("target_emotion", "neutral")
                 ))
 
         return DialogueOutput(
             beat_id=beat.beat_id,
-            dialogue=dialogue if dialogue else [DialogueLine("narrator", "...", "neutral")],
+            dialogue=dialogue if dialogue else [DialogueLine("narrator", "...", "...", "neutral")],
             effects={}
         )
 
@@ -431,11 +441,11 @@ class CharacterActor:
         choice_point: Dict,
         char_id: str
     ) -> Dict[str, ChoiceResponse]:
-        """创建回退选项回应"""
+        """创建回退选项回应（双语）"""
         return {
-            "A": ChoiceResponse("A", [DialogueLine(char_id, "...嗯。", "calm")], {"stress": -5}),
-            "B": ChoiceResponse("B", [DialogueLine(char_id, "......", "neutral")], {}),
-            "C": ChoiceResponse("C", [DialogueLine(char_id, "...什么？", "nervous")], {"stress": 5})
+            "A": ChoiceResponse("A", [DialogueLine(char_id, "...嗯。", "...うん。", "calm")], {"stress": -5}),
+            "B": ChoiceResponse("B", [DialogueLine(char_id, "......", "......", "neutral")], {}),
+            "C": ChoiceResponse("C", [DialogueLine(char_id, "...什么？", "...何？", "nervous")], {"stress": 5})
         }
 
     def generate_scene_dialogue(self, scene_plan: ScenePlan) -> List[DialogueOutput]:
@@ -493,16 +503,18 @@ class CharacterActor:
             return self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
 
     def _build_scene_prompt(self, scene_plan: ScenePlan, characters_info: Dict) -> str:
-        """构建整场景的 prompt"""
+        """构建整场景的 prompt（双语输出）"""
 
-        # 格式化角色信息
+        # 格式化角色信息（包含日文口癖）
         chars_str = ""
         for char_id, info in characters_info.items():
+            verbal_tics_jp = info.get('verbal_tics_jp', info['verbal_tics'])
             chars_str += f"""
 【{info['name']}】({char_id})
   性格: {info['personality'][:80]}
-  第一人称: 「{info['first_person']}」
-  口癖: {', '.join(info['verbal_tics']) if info['verbal_tics'] else '无'}
+  日文第一人称: 「{info['first_person']}」
+  日文口癖: {', '.join(verbal_tics_jp) if verbal_tics_jp else '无'}
+  口癖中文翻译: {', '.join(info['verbal_tics']) if info['verbal_tics'] else '无'}
   当前情绪: {info['emotion']} | 压力: {info['stress']}/100
 """
 
@@ -521,20 +533,21 @@ Beat {i} ({beat.beat_id}): {beat.beat_type}
   导演指示: {beat.direction_notes}
 """
 
-        # 输出格式
+        # 输出格式（双语）
         output_format = """{
   "beats": [
     {
       "beat_id": "beat_1",
       "dialogue": [
-        {"speaker": "角色ID", "text_cn": "对话内容", "emotion": "情绪", "action": "动作(可选)"}
+        {
+          "speaker": "角色ID",
+          "text_cn": "中文对话（第一人称统一用「我」，口癖翻译成中文）",
+          "text_jp": "日本語の台詞（一人称とキャラ口癖をそのまま保持）",
+          "emotion": "情绪",
+          "action": "动作(可选)"
+        }
       ],
       "effects": {"角色ID": {"stress": 变化值, "emotion": "新情绪"}}
-    },
-    {
-      "beat_id": "beat_2",
-      "dialogue": [...],
-      "effects": {...}
     }
   ]
 }"""
@@ -556,13 +569,25 @@ Beat数量: {len(scene_plan.beats)}
 【Beat大纲】
 {beats_str}
 
+【重要：双语输出要求】
+每句对话必须同时输出 text_cn 和 text_jp：
+
+1. text_cn（中文显示用）：
+   - 第一人称统一用「我」
+   - 口癖翻译成自然的中文表达
+   - 例：「我觉得...唔，怎么说呢...」
+
+2. text_jp（日文TTS用）：
+   - 保留角色原本的第一人称（私/俺/ウチ/あたし等）
+   - 保留原汁原味的口癖
+   - 例：「あたしは...えっと、なんていうか...」
+
 【任务】
-为每个 Beat 生成对话。要求：
-1. 每个角色使用其专属第一人称
-2. 适当融入角色口癖（不要每句都用）
-3. 情绪按张力曲线自然变化
-4. 对话要连贯，前后 Beat 要有呼应
-5. 张力等级：1-3平静 / 4-5略紧张 / 6-7紧张 / 8-10激动
+为每个 Beat 生成双语对话。要求：
+1. 情绪按张力曲线自然变化
+2. 对话要连贯，前后 Beat 要有呼应
+3. 张力等级：1-3平静 / 4-5略紧张 / 6-7紧张 / 8-10激动
+4. 中日文内容要对应，但表达方式可以各自自然
 
 【输出格式】严格 JSON：
 {output_format}
@@ -574,7 +599,7 @@ Beat数量: {len(scene_plan.beats)}
         return prompt
 
     def _parse_scene_dialogue(self, result: Dict, beats: List[Beat]) -> List[DialogueOutput]:
-        """解析整场对话结果"""
+        """解析整场对话结果（双语）"""
         all_dialogue = []
         beats_data = result.get("beats", [])
 
@@ -583,9 +608,12 @@ Beat数量: {len(scene_plan.beats)}
                 beat_data = beats_data[i]
                 dialogue = []
                 for line in beat_data.get("dialogue", []):
+                    text_cn = line.get("text_cn", "...")
+                    text_jp = line.get("text_jp", text_cn)  # 如果没有日文，使用中文
                     dialogue.append(DialogueLine(
                         speaker=line.get("speaker", "narrator"),
-                        text_cn=line.get("text_cn", "..."),
+                        text_cn=text_cn,
+                        text_jp=text_jp,
                         emotion=line.get("emotion", "neutral"),
                         action=line.get("action")
                     ))
@@ -598,7 +626,7 @@ Beat数量: {len(scene_plan.beats)}
                 # Beat 数据不足，使用空对话
                 all_dialogue.append(DialogueOutput(
                     beat_id=beat.beat_id,
-                    dialogue=[DialogueLine("narrator", "...", "neutral")],
+                    dialogue=[DialogueLine("narrator", "...", "...", "neutral")],
                     effects={}
                 ))
 

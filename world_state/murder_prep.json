@@ -1,0 +1,19 @@
+{
+  "active": false,
+  "killer_id": null,
+  "target_id": null,
+  "motivation": null,
+  "progress": 0,
+  "can_execute": false,
+  "triggers": {
+    "stress_threshold": 80,
+    "madness_threshold": 70,
+    "relationship_threshold": -50
+  },
+  "prevention_flags": [
+    "player_intervention",
+    "target_moved",
+    "witnessed_by_others"
+  ],
+  "notes": "杀人准备状态追踪。当 progress >= 100 且 can_execute = true 时，可能触发杀人事件。"
+}
