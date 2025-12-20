@@ -8,15 +8,23 @@
 
 ### 2025-12-21 - JSON 解析公共模块整合
 
-**修复文件**: `api/character_actor.py`
+**修复文件**: `api/character_actor.py`, `api/utils.py`
 
 1. **移除本地 clean_json_response()**: 删除了简单版实现
 2. **导入公共模块**: 添加 `from .utils import parse_json_with_diagnostics`
 3. **修改 generate_dialogue_for_beat()**: 使用 `parse_json_with_diagnostics()` 替代 `json.loads(clean_json_response(...))`
 4. **修改 generate_choice_responses()**: 同上
 5. **改进错误处理**: 分离 JSONDecodeError 和其他异常，使用回退逻辑
+6. **修复 +号数字问题**: 在 `clean_json_response()` 中添加正则处理 `"stress": +5` → `"stress": 5`
 
 **现在 director_planner.py 和 character_actor.py 使用相同的 JSON 解析逻辑**
+
+**utils.py 的 clean_json_response() 现在处理 5 种问题**：
+1. markdown 代码块
+2. JSON 对象提取
+3. 中文引号和标点
+4. 正数前的 + 号（JSON 不允许）
+5. 尾部逗号
 
 ### 2025-12-20 - JSON 解析错误修复
 

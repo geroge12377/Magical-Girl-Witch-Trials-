@@ -20,7 +20,8 @@ def clean_json_response(text: str) -> str:
     1. 移除 markdown 代码块 (```json ... ```)
     2. 用正则提取 JSON 对象（处理前后可能有的额外文字）
     3. 处理中文引号和标点
-    4. 处理尾部逗号（JSON 不允许）
+    4. 移除正数前的 + 号（JSON 不允许 +5，只允许 5 或 -5）
+    5. 处理尾部逗号（JSON 不允许）
     """
     text = text.strip()
 
@@ -43,7 +44,10 @@ def clean_json_response(text: str) -> str:
     text = text.replace(''', "'").replace(''', "'")  # 中文单引号
     text = text.replace('：', ':')  # 中文冒号
 
-    # 4. 处理尾部逗号（JSON 不允许）
+    # 4. 移除正数前的 + 号（JSON 不允许 "stress": +5）
+    text = re.sub(r':\s*\+(\d)', r': \1', text)
+
+    # 5. 处理尾部逗号（JSON 不允许）
     # 处理 ,] 和 ,} 的情况
     text = re.sub(r',(\s*[\]\}])', r'\1', text)
 
