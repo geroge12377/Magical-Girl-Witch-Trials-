@@ -2,7 +2,7 @@
   "chapter": 1,
   "day": 1,
   "phase": "dawn",
-  "event_count": 0,
+  "event_count": 5,
   "daily_event_count": 0,
   "alive_count": 13,
   "dead_count": 0,
@@ -15,7 +15,12 @@
     "hiro_defied_warden": false,
     "magic_revealed": false,
     "library_clue_found": false,
-    "murder_occurred": false
+    "murder_occurred": false,
+    "miria_hannah_first_contact": true,
+    "hannah_mask_slip_witnessed": true,
+    "hiro_control_tendency_shown": true,
+    "arisa_rebellion_noted": true,
+    "margo_mediator_role": true
   },
   "triggered_events": [],
   "next_event": null
