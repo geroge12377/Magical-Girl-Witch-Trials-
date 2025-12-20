@@ -6,6 +6,32 @@
 
 ## 更新日志
 
+### 2025-12-21 - 场景对话批量生成重构
+
+**修改文件**: `api/character_actor.py`, `game_loop_v3.py`
+
+**重大改进**: 将逐 Beat 调用改为一次性生成整场对话
+
+1. **重构 generate_scene_dialogue()**:
+   - 旧：循环调用 `generate_dialogue_for_beat()` (N 次 API 调用)
+   - 新：单次 API 调用生成所有 Beat 的对话 (1 次 API 调用)
+   - 优势：减少 API 调用次数，对话更连贯
+
+2. **新增方法**:
+   - `_build_scene_prompt()`: 构建整场景 prompt，包含所有 Beat 大纲
+   - `_parse_scene_dialogue()`: 解析整场对话结果
+   - `_create_fallback_scene_dialogue()`: 整场回退对话
+
+3. **修改 game_loop_v3.py**:
+   - 先调用 `generate_scene_dialogue()` 一次性生成
+   - 再逐个显示每个 Beat 的对话
+
+**API 调用流程变化**:
+```
+旧: Planner(1次) → Actor(N次，每Beat一次) → Choice(1次)
+新: Planner(1次) → Actor(1次，整场) → Choice(1次)
+```
+
 ### 2025-12-21 - JSON 解析公共模块整合
 
 **修复文件**: `api/character_actor.py`, `api/utils.py`

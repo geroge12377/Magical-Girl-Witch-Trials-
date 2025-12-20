@@ -267,19 +267,20 @@ class GameLoopV3:
         # 5. 显示场景规划
         display_scene_plan(scene_plan)
 
-        # 6. 逐个执行Beat
+        # 6. 一次性生成所有 Beat 的对话
+        print("\n💬 角色正在演出...")
+        all_dialogues = self.actor.generate_scene_dialogue(scene_plan)
+
+        # 7. 逐个显示 Beat
         for i, beat in enumerate(scene_plan.beats):
             display_beat_info(beat, i)
 
-            # 调用角色演出层生成对话
-            print("\n💬 角色正在演出...")
-            dialogue_output = self.actor.generate_dialogue_for_beat(beat)
-
-            # 显示对话
-            display_dialogue(dialogue_output)
-
-            # 应用效果
-            self._apply_dialogue_effects(dialogue_output)
+            # 显示对话（从预生成的列表中获取）
+            if i < len(all_dialogues):
+                dialogue_output = all_dialogues[i]
+                display_dialogue(dialogue_output)
+                # 应用效果
+                self._apply_dialogue_effects(dialogue_output)
 
             # 检查是否是玩家选择点
             if scene_plan.player_choice_point:
@@ -298,7 +299,7 @@ class GameLoopV3:
             if i < len(scene_plan.beats) - 1:
                 input("\n[按Enter继续...]")
 
-        # 7. 场景结束
+        # 8. 场景结束
         print("\n" + "=" * 50)
         print("📖 场景结束")
         print("=" * 50)

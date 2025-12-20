@@ -439,14 +439,176 @@ class CharacterActor:
         }
 
     def generate_scene_dialogue(self, scene_plan: ScenePlan) -> List[DialogueOutput]:
-        """生成整个场景的对话"""
-        all_dialogue = []
+        """
+        一次性生成整个场景的所有对话（单次 API 调用）
 
+        输入：ScenePlan（包含所有 Beat）
+        输出：整场景的对话列表 List[DialogueOutput]
+        """
+        if not scene_plan.beats:
+            return []
+
+        # 收集所有角色信息
+        all_characters = set()
         for beat in scene_plan.beats:
-            print(f"  [CharacterActor] 生成 {beat.beat_id} 对话...")
-            dialogue_output = self.generate_dialogue_for_beat(beat)
-            all_dialogue.append(dialogue_output)
+            all_characters.update(beat.characters)
 
+        characters_info = {}
+        for char_id in all_characters:
+            char_data = self.load_character_data(char_id)
+            char_state = self.load_character_state(char_id)
+            characters_info[char_id] = {
+                "name": char_data["core"].get("name", {}).get("zh", char_id),
+                "personality": char_data["personality"].get("versions", {}).get("simple", ""),
+                "first_person": char_data["speech"].get("first_person", "我"),
+                "verbal_tics": char_data["speech"].get("verbal_tics", [])[:3],
+                "stress": char_state.get("stress", 50),
+                "emotion": char_state.get("emotion", "neutral")
+            }
+
+        # 构建整场景的 prompt
+        prompt = self._build_scene_prompt(scene_plan, characters_info)
+
+        # 单次 API 调用
+        try:
+            print(f"  [CharacterActor] 一次性生成 {len(scene_plan.beats)} 个 Beat 的对话...")
+            response = self.client.messages.create(
+                model=MODEL,
+                max_tokens=4096,  # 增大 token 限制以容纳整场对话
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            raw_text = response.content[0].text
+            print(f"  [CharacterActor] API 响应长度: {len(raw_text)} 字符")
+
+            # 解析整场对话
+            result = parse_json_with_diagnostics(raw_text, "场景对话", "CharacterActor")
+            return self._parse_scene_dialogue(result, scene_plan.beats)
+
+        except json.JSONDecodeError as e:
+            print(f"[CharacterActor] JSON 解析失败，使用回退对话")
+            return self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
+        except Exception as e:
+            print(f"[CharacterActor] API 调用失败: {type(e).__name__}: {e}")
+            return self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
+
+    def _build_scene_prompt(self, scene_plan: ScenePlan, characters_info: Dict) -> str:
+        """构建整场景的 prompt"""
+
+        # 格式化角色信息
+        chars_str = ""
+        for char_id, info in characters_info.items():
+            chars_str += f"""
+【{info['name']}】({char_id})
+  性格: {info['personality'][:80]}
+  第一人称: 「{info['first_person']}」
+  口癖: {', '.join(info['verbal_tics']) if info['verbal_tics'] else '无'}
+  当前情绪: {info['emotion']} | 压力: {info['stress']}/100
+"""
+
+        # 格式化 Beat 列表
+        beats_str = ""
+        for i, beat in enumerate(scene_plan.beats, 1):
+            emotion_targets_str = ", ".join([f"{k}→{v}" for k, v in beat.emotion_targets.items()])
+            beats_str += f"""
+Beat {i} ({beat.beat_id}): {beat.beat_type}
+  描述: {beat.description}
+  角色: {', '.join(beat.characters)}
+  说话顺序: {' → '.join(beat.speaker_order)}
+  情绪目标: {emotion_targets_str}
+  张力等级: {beat.tension_level}/10
+  对话数: {beat.dialogue_count}行
+  导演指示: {beat.direction_notes}
+"""
+
+        # 输出格式
+        output_format = """{
+  "beats": [
+    {
+      "beat_id": "beat_1",
+      "dialogue": [
+        {"speaker": "角色ID", "text_cn": "对话内容", "emotion": "情绪", "action": "动作(可选)"}
+      ],
+      "effects": {"角色ID": {"stress": 变化值, "emotion": "新情绪"}}
+    },
+    {
+      "beat_id": "beat_2",
+      "dialogue": [...],
+      "effects": {...}
+    }
+  ]
+}"""
+
+        prompt = f"""你是一位专业的视觉小说对话编剧。根据导演的场景规划，一次性生成整个场景的所有对话。
+
+【游戏背景】
+《魔法少女的魔女审判》- 13名少女被关在孤岛监牢的推理解谜游戏。
+
+【场景信息】
+场景名: {scene_plan.scene_name}
+地点: {scene_plan.location}
+整体弧线: {scene_plan.overall_arc}
+Beat数量: {len(scene_plan.beats)}
+
+【参与角色】
+{chars_str}
+
+【Beat大纲】
+{beats_str}
+
+【任务】
+为每个 Beat 生成对话。要求：
+1. 每个角色使用其专属第一人称
+2. 适当融入角色口癖（不要每句都用）
+3. 情绪按张力曲线自然变化
+4. 对话要连贯，前后 Beat 要有呼应
+5. 张力等级：1-3平静 / 4-5略紧张 / 6-7紧张 / 8-10激动
+
+【输出格式】严格 JSON：
+{output_format}
+
+情绪只能用: happy/sad/angry/scared/nervous/calm/surprised/conflicted/neutral
+
+请直接输出JSON，不要使用markdown代码块。"""
+
+        return prompt
+
+    def _parse_scene_dialogue(self, result: Dict, beats: List[Beat]) -> List[DialogueOutput]:
+        """解析整场对话结果"""
+        all_dialogue = []
+        beats_data = result.get("beats", [])
+
+        for i, beat in enumerate(beats):
+            if i < len(beats_data):
+                beat_data = beats_data[i]
+                dialogue = []
+                for line in beat_data.get("dialogue", []):
+                    dialogue.append(DialogueLine(
+                        speaker=line.get("speaker", "narrator"),
+                        text_cn=line.get("text_cn", "..."),
+                        emotion=line.get("emotion", "neutral"),
+                        action=line.get("action")
+                    ))
+                all_dialogue.append(DialogueOutput(
+                    beat_id=beat_data.get("beat_id", beat.beat_id),
+                    dialogue=dialogue,
+                    effects=beat_data.get("effects", {})
+                ))
+            else:
+                # Beat 数据不足，使用空对话
+                all_dialogue.append(DialogueOutput(
+                    beat_id=beat.beat_id,
+                    dialogue=[DialogueLine("narrator", "...", "neutral")],
+                    effects={}
+                ))
+
+        return all_dialogue
+
+    def _create_fallback_scene_dialogue(self, beats: List[Beat], characters_info: Dict) -> List[DialogueOutput]:
+        """创建整场回退对话"""
+        all_dialogue = []
+        for beat in beats:
+            all_dialogue.append(self._create_fallback_dialogue(beat, characters_info))
         return all_dialogue
 
 
