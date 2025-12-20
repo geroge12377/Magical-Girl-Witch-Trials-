@@ -7,9 +7,9 @@ from pathlib import Path
 # API配置 - 填入你的API Key
 # ============================================
 API_KEYS = {
-    "character": "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",   # 角色API用
-    "director": "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",    # 导演API用
-    "controller": "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"   # 中控API用
+    "",   # 角色API用
+    "",    # 导演API用
+    "controller": ""   # 中控API用
 }
 
 # 模型配置
