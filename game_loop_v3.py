@@ -1,8 +1,8 @@
 # ============================================================================
-# 游戏主循环 v3 - 两层导演架构 + 故事规划系统
+# 游戏主循环 v3 - 三层导演架构 + 完整三天流程
 # ============================================================================
 # 架构：故事规划层 + 导演规划层 + 角色演出层
-# 流程：大纲检查 → 导演规划 → 角色演出 → 玩家选择 → 状态更新 → 结局判定
+# 流程：大纲生成 → 时段循环 → 导演规划 → 角色演出 → 结局判定
 # ============================================================================
 
 import json
@@ -15,6 +15,32 @@ from typing import Dict, List, Optional, Any
 from api import DirectorPlanner, CharacterActor, ScenePlan, Beat, DialogueOutput
 from api import StoryPlanner, EndingType
 from config import get_api_key, MODEL, OUTPUT_DIR
+
+
+# ============================================================================
+# 常量
+# ============================================================================
+
+# 时段顺序
+PERIODS = ["dawn", "morning", "noon", "afternoon", "evening", "night"]
+
+# 时段中文名
+PERIOD_NAMES = {
+    "dawn": "黎明",
+    "morning": "上午",
+    "noon": "正午",
+    "afternoon": "下午",
+    "evening": "傍晚",
+    "night": "夜晚"
+}
+
+# 阶段中文名
+PHASE_NAMES = {
+    "free_time": "自由时间",
+    "investigation": "调查阶段",
+    "trial": "审判阶段",
+    "ending": "结局"
+}
 
 
 # ============================================================================
@@ -41,25 +67,20 @@ def load_yaml(filepath: str) -> dict:
 def display_header():
     """显示游戏标题"""
     print("\n" + "=" * 60)
-    print("   🌙 魔法少女的魔女审判 - AI对话系统 v3")
-    print("   📐 两层导演架构: Planner + Actor")
+    print("   魔法少女的魔女审判 - AI对话系统 v3")
+    print("   三层导演架构: StoryPlanner + DirectorPlanner + Actor")
     print("=" * 60)
 
 def display_time(project_root: Path):
     """显示当前时间"""
     current_day = load_json(project_root / "world_state" / "current_day.json")
-    phase_names = {
-        "dawn": "黎明",
-        "morning": "上午",
-        "free_time": "自由时间",
-        "meal_time": "用餐",
-        "night": "夜晚",
-        "investigation": "调查阶段",
-        "trial": "审判阶段"
-    }
-    phase_cn = phase_names.get(current_day["phase"], current_day["phase"])
+    period = current_day.get("period", "dawn")
+    phase = current_day.get("phase", "free_time")
 
-    print(f"\n📅 第{current_day['day']}天 - {phase_cn}")
+    period_cn = PERIOD_NAMES.get(period, period)
+    phase_cn = PHASE_NAMES.get(phase, phase)
+
+    print(f"\n[第{current_day['day']}天 - {period_cn}] ({phase_cn})")
     print(f"   事件计数: {current_day.get('event_count', 0)}")
 
 def display_world_state(project_root: Path):
@@ -69,55 +90,60 @@ def display_world_state(project_root: Path):
     # 按地点分组
     loc_chars = {}
     for char_id, state in character_states.items():
+        if state.get("status") != "alive":
+            continue
         loc = state.get("location", "未知")
         if loc not in loc_chars:
             loc_chars[loc] = []
         loc_chars[loc].append((char_id, state))
 
     print("\n" + "-" * 40)
-    print("📍 当前位置分布")
+    print("当前位置分布")
     print("-" * 40)
 
     for loc, chars in sorted(loc_chars.items()):
-        print(f"\n【{loc}】({len(chars)}人)")
+        print(f"\n[{loc}] ({len(chars)}人)")
         for char_id, state in chars[:5]:
             stress = state.get("stress", 0)
+            madness = state.get("madness", 0)
             emotion = state.get("emotion", "neutral")
-            stress_bar = "█" * (stress // 20) + "░" * (5 - stress // 20)
-            print(f"  {char_id:8} [{stress_bar}] {emotion:10}")
+            stress_bar = "*" * (stress // 20) + "-" * (5 - stress // 20)
+            print(f"  {char_id:8} S:[{stress_bar}] M:{madness:2} {emotion:10}")
         if len(chars) > 5:
             print(f"  ...还有{len(chars)-5}人")
 
 def display_scene_plan(scene_plan: ScenePlan):
     """显示场景规划"""
     print("\n" + "=" * 50)
-    print(f"🎬 场景规划: {scene_plan.scene_name}")
+    print(f"[场景规划] {scene_plan.scene_name}")
     print("=" * 50)
-    print(f"📍 地点: {scene_plan.location}")
-    print(f"⏱️  预计时长: {scene_plan.time_estimate_minutes}分钟")
-    print(f"📊 Beat数量: {scene_plan.total_beats}")
-    print(f"🎵 推荐BGM: {scene_plan.recommended_bgm}")
-    print(f"\n📈 整体弧线: {scene_plan.overall_arc}")
+    print(f"地点: {scene_plan.location}")
+    print(f"预计时长: {scene_plan.time_estimate_minutes}分钟")
+    print(f"Beat数量: {scene_plan.total_beats}")
+    print(f"推荐BGM: {scene_plan.recommended_bgm}")
+    print(f"\n整体弧线: {scene_plan.overall_arc}")
 
     if scene_plan.key_moments:
-        print(f"\n⭐ 关键时刻:")
+        print(f"\n关键时刻:")
         for moment in scene_plan.key_moments:
-            print(f"   • {moment}")
+            print(f"   - {moment}")
 
 def display_beat_info(beat: Beat, beat_index: int):
     """显示Beat信息"""
-    type_icons = {
-        "opening": "🎬",
-        "development": "📖",
-        "tension": "⚡",
-        "climax": "🔥",
-        "resolution": "🌙"
+    type_marks = {
+        "opening": "[开]",
+        "development": "[展]",
+        "tension": "[张]",
+        "climax": "[潮]",
+        "resolution": "[收]"
     }
-    icon = type_icons.get(beat.beat_type, "▶")
+    mark = type_marks.get(beat.beat_type, "[?]")
 
-    print(f"\n{icon} Beat {beat_index + 1}: {beat.beat_type.upper()}")
-    print(f"   {beat.description[:60]}...")
-    print(f"   张力: {'▓' * beat.tension_level}{'░' * (10 - beat.tension_level)} {beat.tension_level}/10")
+    print(f"\n{mark} Beat {beat_index + 1}: {beat.beat_type.upper()}")
+    desc = beat.description[:60] + "..." if len(beat.description) > 60 else beat.description
+    print(f"   {desc}")
+    tension_bar = "#" * beat.tension_level + "-" * (10 - beat.tension_level)
+    print(f"   张力: [{tension_bar}] {beat.tension_level}/10")
 
 def display_dialogue(dialogue_output: DialogueOutput, show_jp: bool = False):
     """
@@ -143,10 +169,10 @@ def display_dialogue(dialogue_output: DialogueOutput, show_jp: bool = False):
         else:
             emotion_mark = f" [{emotion}]" if emotion else ""
             action_mark = f" *{action}*" if action else ""
-            print(f"\n【{speaker}{emotion_mark}】{action_mark}")
-            print(f"  「{text_cn}」")
+            print(f"\n[{speaker}{emotion_mark}]{action_mark}")
+            print(f"  {text_cn}")
             if show_jp and text_jp:
-                print(f"  [TTS] 「{text_jp}」")
+                print(f"  [TTS] {text_jp}")
 
 def display_choices(choice_point: Dict):
     """显示选项"""
@@ -154,14 +180,14 @@ def display_choices(choice_point: Dict):
         return
 
     print("\n" + "=" * 50)
-    print(f"❓ {choice_point.get('prompt', '你要怎么做？')}")
+    print(f"? {choice_point.get('prompt', '你要怎么做?')}")
     print("=" * 50)
 
     for opt in choice_point.get("options", []):
         opt_id = opt.get("id", "?")
         text = opt.get("text", "...")
         leads_to = opt.get("leads_to", "")
-        hint = f" → {leads_to}" if leads_to else ""
+        hint = f" -> {leads_to}" if leads_to else ""
         print(f"\n  {opt_id}. {text}{hint}")
 
     print(f"\n  D. [自由输入]")
@@ -170,7 +196,7 @@ def display_choices(choice_point: Dict):
 def display_location_menu(locations: dict, current_phase: str):
     """显示地点选择菜单"""
     print("\n" + "-" * 40)
-    print("🚶 你要去哪里？")
+    print("你要去哪里?")
     print("-" * 40)
 
     locs = locations.get("locations", {})
@@ -189,6 +215,15 @@ def display_location_menu(locations: dict, current_phase: str):
     print(f"\n  0. [跳过/待在原地]")
 
     return menu_items
+
+def display_ending(ending_type: str, ending_info: Dict):
+    """显示结局"""
+    print("\n" + "=" * 60)
+    print("=" * 60)
+    print(f"\n  {ending_info.get('title', ending_type)}")
+    print(f"\n  {ending_info.get('description', '')}")
+    print("\n" + "=" * 60)
+    print("=" * 60)
 
 
 # ============================================================================
@@ -215,14 +250,19 @@ class GameLoopV3:
         """运行游戏"""
         display_header()
 
+        # 生成三天大纲
+        print("\n[系统] 正在生成三天大纲...")
+        self.story_planner.generate_three_day_outline()
+        print("[系统] 大纲生成完成!")
+
         while self.running:
             try:
                 self.game_turn()
             except KeyboardInterrupt:
-                print("\n\n👋 游戏中断，感谢游玩！")
+                print("\n\n游戏中断，感谢游玩!")
                 break
             except Exception as e:
-                print(f"\n❌ 发生错误: {e}")
+                print(f"\n[错误] {e}")
                 import traceback
                 traceback.print_exc()
 
@@ -230,13 +270,21 @@ class GameLoopV3:
                 break
 
             # 询问继续
-            cont = input("\n继续？(y/n): ").strip().lower()
+            cont = input("\n继续? (y/n): ").strip().lower()
             if cont != 'y':
-                print("\n👋 游戏暂停，感谢游玩！")
+                print("\n游戏暂停，感谢游玩!")
                 break
 
     def game_turn(self):
         """一个游戏回合"""
+
+        # 0. 加载当前状态
+        current_day_data = load_json(self.project_root / "world_state" / "current_day.json")
+
+        # 检查是否已结束
+        if current_day_data.get("phase") == "ending":
+            self.running = False
+            return
 
         # 1. 显示时间
         display_time(self.project_root)
@@ -244,15 +292,24 @@ class GameLoopV3:
         # 2. 显示世界状态
         display_world_state(self.project_root)
 
-        # 3. 玩家选择地点
-        current_day = load_json(self.project_root / "world_state" / "current_day.json")
-        menu = display_location_menu(self.locations, current_day.get("phase", "free_time"))
+        # 3. 检查是否处于特殊阶段
+        phase = current_day_data.get("phase", "free_time")
+        if phase == "investigation":
+            self.run_investigation()
+            return
+        elif phase == "trial":
+            self.run_trial()
+            return
+
+        # 4. 玩家选择地点
+        menu = display_location_menu(self.locations, phase)
 
         choice = input("\n输入数字: ").strip()
 
         if choice == "0":
             print("\n你决定待在原地...")
             self._increment_event_count()
+            self._check_and_advance()
             return
 
         # 解析选择
@@ -265,27 +322,31 @@ class GameLoopV3:
                 print(f"\n你来到了 {loc_name}...")
             else:
                 print("\n无效选择，待在原地...")
+                self._increment_event_count()
+                self._check_and_advance()
                 return
         except:
             print("\n无效选择，待在原地...")
+            self._increment_event_count()
+            self._check_and_advance()
             return
 
-        # 4. 调用导演规划层
-        print("\n🎬 导演正在规划场景...")
+        # 5. 调用导演规划层
+        print("\n[导演] 正在规划场景...")
         scene_plan = self.planner.plan_scene(
             location=self.player_location,
             scene_type="free"
         )
         self.current_scene_plan = scene_plan
 
-        # 5. 显示场景规划
+        # 6. 显示场景规划
         display_scene_plan(scene_plan)
 
-        # 6. 一次性生成所有 Beat 的对话
-        print("\n💬 角色正在演出...")
+        # 7. 一次性生成所有 Beat 的对话
+        print("\n[角色] 正在演出...")
         all_dialogues = self.actor.generate_scene_dialogue(scene_plan)
 
-        # 7. 逐个显示 Beat
+        # 8. 逐个显示 Beat
         for i, beat in enumerate(scene_plan.beats):
             display_beat_info(beat, i)
 
@@ -300,7 +361,7 @@ class GameLoopV3:
             if scene_plan.player_choice_point:
                 if scene_plan.player_choice_point.get("after_beat") == beat.beat_id:
                     # 预生成选项回应
-                    print("\n🔮 预生成选项回应...")
+                    print("\n[系统] 预生成选项回应...")
                     self.pregenerated_responses = self.actor.generate_choice_responses(
                         scene_plan.player_choice_point,
                         beat.characters
@@ -313,9 +374,9 @@ class GameLoopV3:
             if i < len(scene_plan.beats) - 1:
                 input("\n[按Enter继续...]")
 
-        # 8. 场景结束
+        # 9. 场景结束
         print("\n" + "=" * 50)
-        print("📖 场景结束")
+        print("[场景结束]")
         print("=" * 50)
 
         # 应用场景结果
@@ -323,6 +384,256 @@ class GameLoopV3:
 
         # 增加事件计数
         self._increment_event_count()
+
+        # 10. 检查结局和推进时间
+        self._check_and_advance()
+
+    def _check_and_advance(self):
+        """检查结局条件并推进时间"""
+        current_day_data = load_json(self.project_root / "world_state" / "current_day.json")
+
+        # 检测结局
+        ending = self.story_planner.check_ending()
+        if ending and ending != EndingType.NORMAL_END:
+            # 如果有明确结局（不是默认的normal_end）
+            if current_day_data.get("day", 1) >= 3 and current_day_data.get("period") == "night":
+                self.handle_ending(ending)
+                return
+
+        # 检测杀人预备（每天 night 检测）
+        period = current_day_data.get("period", "dawn")
+        if period == "night":
+            murder = self.story_planner.check_murder_prep()
+            if murder and murder.get("active") and murder.get("can_execute"):
+                self.handle_murder_event(murder)
+                return
+            else:
+                # 检查是否有高madness角色可能杀人
+                self._check_madness_murder()
+
+        # 推进时间
+        self.advance_time()
+
+    def advance_time(self):
+        """推进时间：时段->时段，night后进入下一天"""
+        day_path = self.project_root / "world_state" / "current_day.json"
+        current_day = load_json(day_path)
+
+        period = current_day.get("period", "dawn")
+
+        try:
+            idx = PERIODS.index(period)
+        except ValueError:
+            idx = 0
+
+        if idx < len(PERIODS) - 1:
+            # 推进到下一时段
+            current_day["period"] = PERIODS[idx + 1]
+            print(f"\n[时间流逝] -> {PERIOD_NAMES.get(PERIODS[idx + 1], PERIODS[idx + 1])}")
+        else:
+            # night结束，进入下一天
+            current_day["day"] = current_day.get("day", 1) + 1
+            current_day["period"] = "dawn"
+            current_day["daily_event_count"] = 0
+            print(f"\n[新的一天] 第{current_day['day']}天开始了...")
+
+            # 检查是否超过3天
+            if current_day["day"] > 3:
+                # 游戏应该在第3天结束前触发结局
+                ending = self.story_planner.check_ending()
+                self.handle_ending(ending)
+                return
+
+        save_json(day_path, current_day)
+
+    def _check_madness_murder(self):
+        """检查是否有角色madness过高触发杀人"""
+        states_path = self.project_root / "world_state" / "character_states.json"
+        states = load_json(states_path)
+
+        # 找madness最高的角色
+        highest_madness = 0
+        killer_id = None
+        for char_id, state in states.items():
+            if state.get("status") != "alive":
+                continue
+            madness = state.get("madness", 0)
+            if madness > highest_madness:
+                highest_madness = madness
+                killer_id = char_id
+
+        # 如果有人madness >= 70，可能触发杀人
+        if highest_madness >= 70 and killer_id:
+            # 更新murder_prep状态
+            self.story_planner.update_murder_prep(
+                char_id=killer_id,
+                target_id=self._select_victim(killer_id, states),
+                motivation="madness_threshold",
+                progress=100
+            )
+            print(f"\n[警告] {killer_id} 的疯狂值达到危险水平...")
+
+    def _select_victim(self, killer_id: str, states: Dict) -> str:
+        """选择受害者（基于关系或随机）"""
+        alive_chars = [
+            cid for cid, state in states.items()
+            if state.get("status") == "alive" and cid != killer_id
+        ]
+        if alive_chars:
+            return random.choice(alive_chars)
+        return None
+
+    def handle_ending(self, ending_type: str):
+        """处理结局"""
+        print("\n" + "=" * 60)
+        print("[结局触发]")
+        print("=" * 60)
+
+        ending_info = self.story_planner.get_ending_description(ending_type)
+        display_ending(ending_type, ending_info)
+
+        # 更新状态
+        day_path = self.project_root / "world_state" / "current_day.json"
+        current_day = load_json(day_path)
+        current_day["phase"] = "ending"
+        current_day["ending_type"] = ending_type
+        save_json(day_path, current_day)
+
+        self.running = False
+
+    def handle_murder_event(self, murder_prep: dict):
+        """处理杀人事件 -> 调查 -> 审判"""
+        print("\n" + "=" * 60)
+        print("[杀人事件发生]")
+        print("=" * 60)
+
+        killer_id = murder_prep.get("killer_id")
+        target_id = murder_prep.get("target_id")
+
+        print(f"\n  这一夜，有什么不对劲...")
+        print(f"  走廊里传来异样的脚步声，然后是...尖叫。")
+        print(f"  接着，一切归于寂静。")
+        input("\n[按Enter继续...]")
+
+        # 更新状态
+        states_path = self.project_root / "world_state" / "character_states.json"
+        states = load_json(states_path)
+        if target_id and target_id in states:
+            states[target_id]["status"] = "dead"
+            save_json(states_path, states)
+
+        # 更新current_day
+        day_path = self.project_root / "world_state" / "current_day.json"
+        current_day = load_json(day_path)
+        current_day["murderer_id"] = killer_id
+        current_day["victim_id"] = target_id
+        current_day["flags"]["murder_occurred"] = True
+        current_day["phase"] = "investigation"
+        current_day["investigation_count"] = 5  # 5次调查机会
+        save_json(day_path, current_day)
+
+        print(f"\n  [早晨] 发现了尸体...")
+        print(f"  {target_id} 已经死亡。")
+        print(f"\n  典狱长: 发现了尸体! 现在开始进入调查时间。")
+        input("\n[按Enter进入调查阶段...]")
+
+    def run_investigation(self):
+        """调查阶段（框架）"""
+        day_path = self.project_root / "world_state" / "current_day.json"
+        current_day = load_json(day_path)
+
+        inv_count = current_day.get("investigation_count", 0)
+
+        print("\n" + "=" * 50)
+        print(f"[调查阶段] 剩余调查次数: {inv_count}")
+        print("=" * 50)
+
+        if inv_count <= 0:
+            print("\n调查时间结束，准备进入审判...")
+            current_day["phase"] = "trial"
+            save_json(day_path, current_day)
+            input("\n[按Enter进入审判阶段...]")
+            return
+
+        print("\n可执行的调查行动:")
+        print("  1. 搜查现场")
+        print("  2. 询问角色")
+        print("  3. 查看证据")
+        print("  0. 结束调查，进入审判")
+
+        choice = input("\n选择行动: ").strip()
+
+        if choice == "0":
+            current_day["phase"] = "trial"
+            save_json(day_path, current_day)
+            print("\n准备进入审判...")
+            return
+        elif choice in ["1", "2", "3"]:
+            current_day["investigation_count"] = inv_count - 1
+            save_json(day_path, current_day)
+
+            # 简化的调查反馈
+            if choice == "1":
+                print("\n  你搜查了现场，发现了一些可疑的痕迹...")
+            elif choice == "2":
+                print("\n  你询问了其他人，收集了一些证言...")
+            elif choice == "3":
+                print("\n  你查看了已收集的证据...")
+        else:
+            print("\n无效选择")
+
+    def run_trial(self):
+        """审判阶段（框架）"""
+        day_path = self.project_root / "world_state" / "current_day.json"
+        current_day = load_json(day_path)
+
+        print("\n" + "=" * 60)
+        print("[魔女审判]")
+        print("=" * 60)
+
+        print("\n  典狱长: 魔女审判现在开始。")
+        print("  你们有有限的时间讨论，找出凶手。")
+        print("  讨论结束后，将进行投票。得票最多者将被处刑。")
+
+        # 获取存活角色列表
+        states_path = self.project_root / "world_state" / "character_states.json"
+        states = load_json(states_path)
+        alive_chars = [cid for cid, state in states.items() if state.get("status") == "alive"]
+
+        print("\n存活角色:")
+        for i, char_id in enumerate(alive_chars, 1):
+            print(f"  {i}. {char_id}")
+
+        print("\n请投票选择你认为的凶手:")
+        vote = input("输入编号: ").strip()
+
+        try:
+            vote_idx = int(vote) - 1
+            if 0 <= vote_idx < len(alive_chars):
+                voted_id = alive_chars[vote_idx]
+                murderer_id = current_day.get("murderer_id")
+
+                print(f"\n  投票结果: {voted_id}")
+
+                if voted_id == murderer_id:
+                    # 正确审判
+                    print(f"\n  {voted_id}: ...是我做的。我无法控制自己...")
+                    print("  处刑开始。一条生命就这样消逝了。")
+                    current_day["flags"]["correct_judgment"] = True
+                    self.handle_ending(EndingType.NORMAL_END)
+                else:
+                    # 错误审判
+                    print(f"\n  {voted_id}: 不...不是我...我什么都没做...!")
+                    print("  处刑执行了。一个无辜的生命消逝了。")
+                    print("  而真正的凶手...还藏在你们之中。")
+                    current_day["flags"]["correct_judgment"] = False
+                    self.handle_ending(EndingType.BAD_END)
+
+                save_json(day_path, current_day)
+            else:
+                print("\n无效选择")
+        except:
+            print("\n无效输入")
 
     def _handle_player_choice(self, choice_point: Dict, characters: List[str]):
         """处理玩家选择"""
@@ -345,10 +656,9 @@ class GameLoopV3:
                 # 找主要角色
                 main_char = characters[0] if characters else None
                 if main_char:
-                    print(f"\n💬 {main_char} 正在思考...")
-                    # 可以调用角色API进行自由对话
-                    print(f"\n【{main_char}】")
-                    print(f"  「......」")
+                    print(f"\n[{main_char}] 正在思考...")
+                    print(f"\n[{main_char}]")
+                    print(f"  ......」")
                 break
 
             if choice in ["A", "B", "C"]:
@@ -363,14 +673,14 @@ class GameLoopV3:
                         response = self.pregenerated_responses[choice]
                         print("\n" + "-" * 40)
                         for line in response.dialogue:
-                            print(f"\n【{line.speaker}】[{line.emotion}]")
-                            print(f"  「{line.text_cn}」")
+                            print(f"\n[{line.speaker}] [{line.emotion}]")
+                            print(f"  {line.text_cn}")
 
                         # 应用效果
                         self._apply_choice_effects(response.effects)
 
                         if opt.get("leads_to") == "负面" or opt.get("leads_to") == "危险":
-                            print("\n⚠️ 这个选择可能导向危险的结局...")
+                            print("\n[警告] 这个选择可能导向危险的结局...")
                 break
 
             print("无效输入，请重试")
@@ -408,19 +718,15 @@ class GameLoopV3:
             states_path = self.project_root / "world_state" / "character_states.json"
             states = load_json(states_path)
 
-            # effects可能是 {"stress": 5, "affection": -3} 格式
-            # 或者 {"char_id": {"stress": 5}} 格式
             for key, value in effects.items():
                 if isinstance(value, dict):
-                    # 角色特定效果
                     if key in states:
                         for stat, change in value.items():
                             if stat in ["stress", "madness"]:
                                 current = states[key].get(stat, 0)
                                 states[key][stat] = max(0, min(100, current + change))
                 else:
-                    # 全局效果（应用到某个主要角色）
-                    pass  # 需要知道主要角色
+                    pass
 
             save_json(states_path, states)
         except Exception as e:
@@ -436,7 +742,6 @@ class GameLoopV3:
             states_path = self.project_root / "world_state" / "character_states.json"
             states = load_json(states_path)
 
-            # 应用压力变化
             stress_changes = outcomes.get("stress_changes", {})
             for char_id, change in stress_changes.items():
                 if char_id in states:
@@ -445,7 +750,6 @@ class GameLoopV3:
 
             save_json(states_path, states)
 
-            # 设置标记
             flags_to_set = outcomes.get("flags_to_set", [])
             if flags_to_set:
                 day_path = self.project_root / "world_state" / "current_day.json"
@@ -465,6 +769,7 @@ class GameLoopV3:
             day_path = self.project_root / "world_state" / "current_day.json"
             current_day = load_json(day_path)
             current_day["event_count"] = current_day.get("event_count", 0) + 1
+            current_day["daily_event_count"] = current_day.get("daily_event_count", 0) + 1
             save_json(day_path, current_day)
         except Exception as e:
             print(f"[警告] 更新事件计数失败: {e}")
@@ -479,8 +784,9 @@ class GameLoopV3:
             actions = ["站着发呆", "四处张望", "低头沉思", "靠墙休息", "来回踱步"]
 
             for char_id, state in states.items():
-                # 随机移动
-                if random.random() < 0.3:  # 30%几率移动
+                if state.get("status") != "alive":
+                    continue
+                if random.random() < 0.3:
                     state["location"] = random.choice(locations_list)
                 state["action"] = random.choice(actions)
                 state["can_interact"] = True
@@ -496,7 +802,7 @@ class GameLoopV3:
 
 def main():
     """主入口"""
-    print("\n🎮 正在启动游戏...")
+    print("\n正在启动游戏...")
 
     game = GameLoopV3()
     game.run()

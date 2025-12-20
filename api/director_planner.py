@@ -156,6 +156,29 @@ class DirectorPlanner:
             and state.get("can_interact", True)
         ]
 
+    def _load_day_outline(self, day: int) -> Dict:
+        """加载指定日期的大纲"""
+        outline_path = self.project_root / "world_state" / "chapter_outline.json"
+        if not outline_path.exists():
+            return {"theme": "", "key_events": []}
+
+        try:
+            outline = load_json(outline_path)
+            days = outline.get("days", [])
+            for day_data in days:
+                if day_data.get("day") == day:
+                    return {
+                        "theme": day_data.get("theme", ""),
+                        "key_events": day_data.get("key_events", []),
+                        "tension_arc": day_data.get("tension_arc", ""),
+                        "potential_murder": day_data.get("potential_murder", False),
+                        "notes": day_data.get("notes", "")
+                    }
+            return {"theme": "", "key_events": []}
+        except Exception as e:
+            print(f"[DirectorPlanner] 加载大纲失败: {e}")
+            return {"theme": "", "key_events": []}
+
     def plan_scene(
         self,
         location: str,
@@ -168,12 +191,15 @@ class DirectorPlanner:
         # 1. 加载上下文
         context = self.load_game_context()
 
-        # 2. 获取在场角色
+        # 2. 读取当天大纲
+        day_outline = self._load_day_outline(context.get("day", 1))
+
+        # 3. 获取在场角色
         chars_at_location = self.get_characters_at_location(location)
         if not chars_at_location:
             return self._create_empty_scene(location)
 
-        # 3. 加载角色数据
+        # 4. 加载角色数据
         characters_info = {}
         for char_id in chars_at_location[:6]:  # 最多6个角色
             char_data = self.load_character_data(char_id)
@@ -188,8 +214,8 @@ class DirectorPlanner:
                 "action": state.get("action", "站着")
             }
 
-        # 4. 构建prompt
-        prompt = self._build_planner_prompt(context, characters_info, location, scene_type, fixed_event_data)
+        # 5. 构建prompt（传入大纲信息）
+        prompt = self._build_planner_prompt(context, characters_info, location, scene_type, fixed_event_data, day_outline)
 
         # 5. 调用API
         try:
@@ -219,7 +245,8 @@ class DirectorPlanner:
         characters_info: Dict,
         location: str,
         scene_type: str,
-        fixed_event_data: Optional[Dict]
+        fixed_event_data: Optional[Dict],
+        day_outline: Optional[Dict] = None
     ) -> str:
         """构建规划层prompt"""
 
@@ -229,6 +256,22 @@ class DirectorPlanner:
 已触发事件: {', '.join(context['triggered_events'][-5:]) if context['triggered_events'] else '无'}
 当前位置: {location}
 场景类型: {scene_type}"""
+
+        # 添加当日大纲信息
+        day_theme = ""
+        day_events = ""
+        if day_outline:
+            if day_outline.get("theme"):
+                day_theme = f"\n当日主题: {day_outline['theme']}"
+            if day_outline.get("key_events"):
+                events_str = ", ".join(day_outline['key_events'][:3])
+                day_events = f"\n关键事件提示: {events_str}"
+            if day_outline.get("tension_arc"):
+                day_theme += f"\n张力曲线: {day_outline['tension_arc']}"
+            if day_outline.get("potential_murder"):
+                day_theme += f"\n[警告] 今天可能发生杀人事件"
+
+        context_str += day_theme + day_events
 
         # 格式化角色信息
         chars_str = ""
