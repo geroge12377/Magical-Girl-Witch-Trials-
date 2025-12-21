@@ -804,6 +804,28 @@ class GameLoopV3:
         except Exception as e:
             print(f"[警告] 更新NPC位置失败: {e}")
 
+    def scatter_npcs(self):
+        """将NPC分散到各个地点"""
+        try:
+            states_path = self.project_root / "world_state" / "character_states.json"
+            states = load_json(states_path)
+
+            # 可用地点
+            locations = ["食堂", "牢房区", "图书室", "庭院", "走廊"]
+            actions = ["四处张望", "静静站着", "来回踱步", "若有所思", "环顾四周"]
+
+            # 为每个角色随机分配地点
+            for char_id, state in states.items():
+                if state.get("status") == "alive":
+                    state["location"] = random.choice(locations)
+                    state["action"] = random.choice(actions)
+                    state["can_interact"] = True
+
+            save_json(states_path, states)
+            print("\n[系统] NPC已分散到各个地点")
+        except Exception as e:
+            print(f"[警告] 分散NPC失败: {e}")
+
     # ============================================================================
     # 固定事件相关方法
     # ============================================================================
@@ -856,6 +878,10 @@ class GameLoopV3:
         # 处理转换
         transitions = self.fixed_event_manager.handle_event_transitions(event_data)
 
+        # 检查是否需要分散NPC
+        if transitions.get("trigger_npc_scatter"):
+            self.scatter_npcs()
+
         # 检查游戏结束
         if transitions.get("game_over"):
             ending_type = transitions.get("ending_type", "normal_end")
@@ -873,16 +899,22 @@ class GameLoopV3:
             # 有后续事件，不推进时间，让下一回合触发
             return
 
+        # 检查是否改变了时段
+        if transitions.get("next_period"):
+            # 时段已在 handle_event_transitions 中更新
+            print(f"\n[时间流逝] -> {PERIOD_NAMES.get(transitions['next_period'], transitions['next_period'])}")
+            return
+
         # 检查是否进入下一天
         if transitions.get("next_day"):
             # next_day 已在 handle_event_transitions 中处理
-            # 不需要再调用 advance_time
             print(f"\n[新的一天开始了...]")
             return
 
         # 检查是否改变了阶段
         if transitions.get("next_phase"):
             # 阶段改变，不推进时间
+            print(f"\n[阶段变更] -> {PHASE_NAMES.get(transitions['next_phase'], transitions['next_phase'])}")
             return
 
         # 普通事件：检查并推进时间

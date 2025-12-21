@@ -36,6 +36,47 @@
 
 ---
 
+### 2025-12-22 - 游戏流程问题修复 v3
+
+**修改文件**: `game_loop_v3.py`, `api/fixed_event_manager.py`, `events/fixed_events.yaml`, `world_state/*.json`
+
+**问题**:
+1. 时段跳跃：dawn 直接跳到 noon，跳过 morning
+2. 事件链断裂：after_event 类型事件未触发
+3. 角色未分散：所有人始终在牢房区
+4. 固定事件缺失：day1_night 未触发
+
+**修复内容**:
+
+1. **game_loop_v3.py**:
+   - 新增 `scatter_npcs()` 方法：将NPC随机分散到各地点
+   - 修改 `_run_fixed_event()`：支持 `trigger_npc_scatter` 和 `next_period`
+
+2. **fixed_event_manager.py**:
+   - `handle_event_transitions()` 添加 `trigger_npc_scatter` 支持
+   - `_check_trigger()` 将 `after_event` 提前处理，跳过 period 检查
+
+3. **fixed_events.yaml**:
+   - `day1_awakening` 添加 `next_event: day1_morning_assembly`
+   - `day1_introduction` 添加 `trigger_npc_scatter: true`
+   - `day1_night` 改为 `period: "night"` 触发（替代 event_count）
+
+**预期流程**:
+```
+dawn: day1_awakening → (next_event)
+morning: day1_morning_assembly → (next_event)
+         day1_rules → (after_event)
+         day1_hiro → (after_event)
+         day1_intro → (after_event, trigger_npc_scatter)
+         [自由探索]
+event_count=3: day1_lunch
+         [自由探索]
+event_count=6: day1_dinner
+night: day1_night → (next_day)
+```
+
+---
+
 ### 2025-12-22 - 固定事件触发系统 v2 修复
 
 **修改文件**: `events/fixed_events.yaml`, `api/fixed_event_manager.py`, `world_state/current_day.json`, `world_state/character_states.json`

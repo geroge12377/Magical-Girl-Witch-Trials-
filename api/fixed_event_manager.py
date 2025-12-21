@@ -136,6 +136,24 @@ class FixedEventManager:
         trigger = event_data.get("trigger", {})
         trigger_type = trigger.get("type", "auto")
 
+        # after_event 类型优先处理，不需要检查 day/period/phase
+        if trigger_type == "after_event":
+            after = trigger.get("after", "")
+            triggered_list = self.get_triggered_events()
+
+            # 检查前置事件是否已触发
+            if after not in triggered_list:
+                return False
+
+            # 检查额外的 config_check（如果有）
+            config_check = trigger.get("config_check")
+            if config_check:
+                config_value = self.config.get(config_check, True)
+                if not config_value:
+                    return False
+
+            return True
+
         # 1. 检查日期（必须匹配）
         if "day" in trigger and trigger["day"] != day:
             return False
@@ -183,23 +201,7 @@ class FixedEventManager:
             condition = trigger.get("condition", "")
             return self._evaluate_condition(condition, flags)
 
-        elif trigger_type == "after_event":
-            # 在某事件后触发
-            after = trigger.get("after", "")
-            triggered_list = self.get_triggered_events()
-
-            # 检查前置事件是否已触发
-            if after not in triggered_list:
-                return False
-
-            # 检查额外的 config_check（如果有）
-            config_check = trigger.get("config_check")
-            if config_check:
-                config_value = self.config.get(config_check, True)
-                if not config_value:
-                    return False
-
-            return True
+        # after_event 已在前面处理，这里不需要重复
 
         return False
 
@@ -297,7 +299,8 @@ class FixedEventManager:
             "next_day": event_data.get("next_day", False),
             "next_event": event_data.get("next_event"),
             "game_over": event_data.get("game_over", False),
-            "ending_type": event_data.get("ending_type")
+            "ending_type": event_data.get("ending_type"),
+            "trigger_npc_scatter": event_data.get("trigger_npc_scatter", False)
         }
 
         # 更新 current_day.json

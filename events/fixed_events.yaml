@@ -63,6 +63,7 @@ fixed_events:
       player:
         stress: 5
     next_period: "morning"
+    next_event: "day1_morning_assembly"
 
   day1_morning_assembly:
     id: "day1_morning"
@@ -192,6 +193,7 @@ fixed_events:
       - "character_profiles"
       - "relationship_system"
     next_phase: "free_time"
+    trigger_npc_scatter: true
 
   day1_lunch:
     id: "day1_lunch"
@@ -245,10 +247,9 @@ fixed_events:
     id: "day1_night"
     name: "第一天就寝"
     trigger:
-      type: "event_count"
+      type: "auto"
       day: 1
-      count: 9
-      phase: "free_time"
+      period: "night"
     priority: 100
     scene:
       location: "牢房区"
