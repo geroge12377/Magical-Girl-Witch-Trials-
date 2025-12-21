@@ -1,12 +1,14 @@
 # ============================================================================
-# api/ - v3两层导演架构模块 + 故事规划系统
+# api/ - v3三层导演架构模块 + 故事规划系统 + 固定事件系统
 # ============================================================================
 # 导演规划层(director_planner) + 角色演出层(character_actor) + 故事规划层(story_planner)
+# 固定事件管理器(fixed_event_manager)
 # ============================================================================
 
 from .director_planner import DirectorPlanner, ScenePlan, Beat
 from .character_actor import CharacterActor, DialogueOutput, DialogueLine
 from .story_planner import StoryPlanner, EndingType, DayOutline, ChapterOutline
+from .fixed_event_manager import FixedEventManager
 
 __all__ = [
     # 导演规划层
@@ -21,5 +23,7 @@ __all__ = [
     'StoryPlanner',
     'EndingType',
     'DayOutline',
-    'ChapterOutline'
+    'ChapterOutline',
+    # 固定事件系统
+    'FixedEventManager'
 ]

@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Any
 # 导入API模块
 from api import DirectorPlanner, CharacterActor, ScenePlan, Beat, DialogueOutput
 from api import StoryPlanner, EndingType
+from api.fixed_event_manager import FixedEventManager
 from config import get_api_key, MODEL, OUTPUT_DIR
 
 
@@ -238,6 +239,7 @@ class GameLoopV3:
         self.story_planner = StoryPlanner(self.project_root)  # 故事规划层
         self.planner = DirectorPlanner(self.project_root)      # 导演规划层
         self.actor = CharacterActor(self.project_root)         # 角色演出层
+        self.fixed_event_manager = FixedEventManager(self.project_root)  # 固定事件管理器
         self.locations = load_yaml(self.project_root / "world_state" / "locations.yaml")
 
         self.player_location = "牢房区"
@@ -299,6 +301,12 @@ class GameLoopV3:
             return
         elif phase == "trial":
             self.run_trial()
+            return
+
+        # === 新增：检查固定事件 ===
+        fixed_event = self.fixed_event_manager.get_pending_fixed_event()
+        if fixed_event:
+            self._run_fixed_event(fixed_event)
             return
 
         # 4. 玩家选择地点
@@ -794,6 +802,100 @@ class GameLoopV3:
             save_json(states_path, states)
         except Exception as e:
             print(f"[警告] 更新NPC位置失败: {e}")
+
+    # ============================================================================
+    # 固定事件相关方法
+    # ============================================================================
+
+    def display_fixed_event(self, event_data: Dict):
+        """显示固定事件"""
+        event_name = event_data.get("name", "未知事件")
+        scene = event_data.get("scene", {})
+        script = event_data.get("script", [])
+
+        print("\n" + "=" * 60)
+        print(f"[固定事件] {event_name}")
+        print("=" * 60)
+
+        if scene.get("description"):
+            print(f"\n{scene['description']}")
+
+        # 显示脚本对话
+        for line in script:
+            speaker = line.get("speaker", "narrator")
+            text = line.get("text_cn", line.get("text", "..."))
+
+            if speaker == "narrator":
+                print(f"\n  {text}")
+            elif speaker == "warden":
+                print(f"\n[典狱长]")
+                print(f"  {text}")
+            else:
+                print(f"\n[{speaker}]")
+                print(f"  {text}")
+
+        input("\n[按Enter继续...]")
+
+    def _run_fixed_event(self, event_data: Dict):
+        """执行固定事件"""
+        event_id = event_data.get("_event_id", "unknown")
+
+        # 显示事件
+        self.display_fixed_event(event_data)
+
+        # 应用结果
+        self.fixed_event_manager.apply_event_outcomes(event_data)
+
+        # 标记为已触发
+        self.fixed_event_manager.mark_event_triggered(event_id)
+
+        # 增加事件计数
+        self._increment_event_count()
+
+        # 处理转换
+        transitions = self.fixed_event_manager.handle_event_transitions(event_data)
+
+        # 检查游戏结束
+        if transitions.get("game_over"):
+            ending_type = transitions.get("ending_type", "normal_end")
+            self.handle_ending(ending_type)
+            return
+
+        # 检查分支
+        branch = event_data.get("branch")
+        if branch:
+            self._handle_event_branch(branch)
+            return
+
+        # 检查是否进入下一天
+        if transitions.get("next_day"):
+            print(f"\n[新的一天开始了...]")
+
+        # 检查并推进时间
+        self._check_and_advance()
+
+    def _handle_event_branch(self, branches: List[Dict]):
+        """处理事件分支"""
+        state = load_json(self.project_root / "world_state" / "current_day.json")
+        flags = state.get("flags", {})
+
+        for branch in branches:
+            condition = branch.get("condition", "default")
+            next_event = branch.get("next_event")
+
+            if condition == "default":
+                # 默认分支
+                if next_event:
+                    state["next_event"] = next_event
+                    save_json(self.project_root / "world_state" / "current_day.json", state)
+                break
+
+            # 评估条件
+            if self.fixed_event_manager._evaluate_condition(condition, flags):
+                if next_event:
+                    state["next_event"] = next_event
+                    save_json(self.project_root / "world_state" / "current_day.json", state)
+                break
 
 
 # ============================================================================
