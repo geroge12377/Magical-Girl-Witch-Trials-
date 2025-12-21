@@ -400,16 +400,17 @@ class GameLoopV3:
         """检查结局条件并推进时间"""
         current_day_data = load_json(self.project_root / "world_state" / "current_day.json")
 
-        # 检测结局
-        ending = self.story_planner.check_ending()
-        if ending and ending != EndingType.NORMAL_END:
-            # 如果有明确结局（不是默认的normal_end）
-            if current_day_data.get("day", 1) >= 3 and current_day_data.get("period") == "night":
+        # 检测结局（仅在第3天晚上检测）
+        day = current_day_data.get("day", 1)
+        period = current_day_data.get("period", "dawn")
+
+        if day >= 3 and period == "night":
+            ending = self.story_planner.check_ending()
+            if ending:
                 self.handle_ending(ending)
                 return
 
         # 检测杀人预备（每天 night 检测）
-        period = current_day_data.get("period", "dawn")
         if period == "night":
             murder = self.story_planner.check_murder_prep()
             if murder and murder.get("active") and murder.get("can_execute"):
@@ -867,11 +868,24 @@ class GameLoopV3:
             self._handle_event_branch(branch)
             return
 
+        # 检查是否有后续事件（next_event）
+        if transitions.get("next_event"):
+            # 有后续事件，不推进时间，让下一回合触发
+            return
+
         # 检查是否进入下一天
         if transitions.get("next_day"):
+            # next_day 已在 handle_event_transitions 中处理
+            # 不需要再调用 advance_time
             print(f"\n[新的一天开始了...]")
+            return
 
-        # 检查并推进时间
+        # 检查是否改变了阶段
+        if transitions.get("next_phase"):
+            # 阶段改变，不推进时间
+            return
+
+        # 普通事件：检查并推进时间
         self._check_and_advance()
 
     def _handle_event_branch(self, branches: List[Dict]):

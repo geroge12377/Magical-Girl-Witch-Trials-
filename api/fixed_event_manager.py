@@ -127,26 +127,46 @@ class FixedEventManager:
         trigger = event_data.get("trigger", {})
         trigger_type = trigger.get("type", "auto")
 
-        # 检查日期
+        # 1. 检查日期（必须匹配）
         if "day" in trigger and trigger["day"] != day:
             return False
 
-        # 检查时段
+        # 2. 检查时段（必须匹配）
         if "period" in trigger and trigger["period"] != period:
             return False
 
-        # 检查阶段
+        # 3. 检查阶段
         if "phase" in trigger and trigger["phase"] != phase:
             return False
 
-        # 根据触发类型检查
+        # 4. 检查最小日期
+        if "day_min" in trigger and day < trigger["day_min"]:
+            return False
+
+        # 5. 检查 any_phase（如果设置了，跳过阶段检查）
+        if trigger.get("any_phase"):
+            pass  # 不检查 phase
+
+        # 6. 根据触发类型检查
         if trigger_type == "auto":
-            # 自动触发：只要日期和时段匹配
+            # 自动触发：日期+时段匹配即可
             return True
 
         elif trigger_type == "event_count":
-            # 事件计数触发
+            # 事件计数触发：必须同时满足日期+时段+阶段+计数
             required_count = trigger.get("count", 0)
+            trigger_day = trigger.get("day")
+            trigger_phase = trigger.get("phase", "free_time")
+
+            # 日期必须匹配（如果指定了）
+            if trigger_day is not None and trigger_day != day:
+                return False
+
+            # 阶段必须匹配
+            if trigger_phase != phase:
+                return False
+
+            # 计数必须达到
             return event_count >= required_count
 
         elif trigger_type == "condition":
@@ -158,7 +178,19 @@ class FixedEventManager:
             # 在某事件后触发
             after = trigger.get("after", "")
             triggered_list = self.get_triggered_events()
-            return after in triggered_list
+
+            # 检查前置事件是否已触发
+            if after not in triggered_list:
+                return False
+
+            # 检查额外的 config_check（如果有）
+            config_check = trigger.get("config_check")
+            if config_check:
+                config_value = self.config.get(config_check, True)
+                if not config_value:
+                    return False
+
+            return True
 
         return False
 
@@ -249,17 +281,7 @@ class FixedEventManager:
             state["emotion"] = effects["emotion"]
 
     def handle_event_transitions(self, event_data: Dict) -> Dict[str, Any]:
-        """
-        处理事件后的状态转换
-
-        Returns:
-            包含转换信息的字典：
-            - next_phase: 下一阶段
-            - next_day: 是否进入下一天
-            - next_event: 下一个事件ID
-            - game_over: 是否游戏结束
-            - ending_type: 结局类型
-        """
+        """处理事件后的状态转换"""
         result = {
             "next_phase": event_data.get("next_phase"),
             "next_day": event_data.get("next_day", False),
@@ -284,6 +306,13 @@ class FixedEventManager:
             current_day["day"] = current_day.get("day", 1) + 1
             current_day["period"] = "dawn"
             current_day["daily_event_count"] = 0
+            # 重置 next_event（新的一天应该重新检查事件）
+            current_day["next_event"] = None
+
+        # 处理 trigger_summary（如果有）
+        if event_data.get("trigger_summary"):
+            # 可以在这里添加总结显示逻辑
+            pass
 
         save_json(day_path, current_day)
 
