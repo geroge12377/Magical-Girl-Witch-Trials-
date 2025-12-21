@@ -6,37 +6,7 @@
 
 ## 更新日志
 
-### 2025-12-22 - 橘雪莉角色设定修正
-
-**修改文件**: `characters/sherry/personality.yaml`, `characters/sherry/speech.yaml`
-
-**问题**: AI 生成的雪莉台词风格错误（冷血研究者 → 应为天真活宝）
-
-**修复内容**:
-
-1. **personality.yaml**:
-   - 移除「一切の道徳心を持たない」「死体を見ても平然」
-   - 改为「天真爛漫」「元気いっぱい」「ムードメーカー」
-   - 新增 trait「場を和ませようとする」
-
-2. **speech.yaml**:
-   - 新增 verbal_tics：「わあ！」「すごい！」「面白そう！」
-   - 新增 emotion：`curious`（好奇时的说话方式）
-   - 新增 example_lines：
-     - `comforting`: 安慰他人
-     - `about_mystery`: 关于谜题
-     - `awkward_timing`: 不合时宜的发言（角色特点）
-     - `seeing_corpse`: 看到尸体时的反应
-   - 移除旧的 `about_corpse`（"我见惯了"）
-
-**验收标准**:
-- ✅ 雪莉台词应为："哇！好有趣！"
-- ✅ 安慰时说："没事的没事的！大家一起想办法吧！"
-- ✅ 不应出现："真有研究价值"、"精彩的崩溃"等学术腔
-
----
-
-### 2025-12-22 - 游戏流程问题修复 v3
+### 2025-12-22 - 游戏流程问题修复 v3 ⭐ 最新
 
 **修改文件**: `game_loop_v3.py`, `api/fixed_event_manager.py`, `events/fixed_events.yaml`, `world_state/*.json`
 
@@ -74,6 +44,27 @@ event_count=3: day1_lunch
 event_count=6: day1_dinner
 night: day1_night → (next_day)
 ```
+
+---
+
+### 2025-12-22 - 橘雪莉角色设定修正
+
+**修改文件**: `characters/sherry/personality.yaml`, `characters/sherry/speech.yaml`
+
+**问题**: AI 生成的雪莉台词风格错误（冷血研究者 → 应为天真活宝）
+
+**修复内容**:
+
+1. **personality.yaml**:
+   - 移除「一切の道徳心を持たない」「死体を見ても平然」
+   - 改为「天真爛漫」「元気いっぱい」「ムードメーカー」
+   - 新增 trait「場を和ませようとする」
+
+2. **speech.yaml**:
+   - 新增 verbal_tics：「わあ！」「すごい！」「面白そう！」
+   - 新增 emotion：`curious`（好奇时的说话方式）
+   - 新增 example_lines：`comforting`, `about_mystery`, `awkward_timing`, `seeing_corpse`
+   - 移除旧的 `about_corpse`（"我见惯了"）
 
 ---
 
