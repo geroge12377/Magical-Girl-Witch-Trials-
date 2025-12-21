@@ -6,7 +6,34 @@
 
 ## 更新日志
 
-### 2025-12-22 - 游戏流程问题修复 v3 ⭐ 最新
+### 2025-12-22 - 游戏流程问题修复 v4（Demo自动重置）⭐ 最新
+
+**修改文件**: `game_loop_v3.py`
+
+**新增功能**: Demo 启动时自动重置游戏状态
+
+**修复内容**:
+
+1. **game_loop_v3.py**:
+   - 新增 `reset_game_state()` 方法：自动重置 `current_day.json` 和 `character_states.json`
+   - 在 `run()` 方法开头调用 `reset_game_state()`
+   - 无需手动清理残留数据，每次启动都是干净状态
+
+**预期流程**:
+```
+[启动] reset_game_state() → 自动重置所有状态
+       current_day.json → day=1, period="dawn", triggered_events=[]
+       character_states.json → 所有角色重置到初始值
+[继续] 正常游戏流程...
+```
+
+**验收标准**:
+- ✅ 每次启动 Demo 自动重置状态（无需手动清理）
+- ✅ 测试后再次启动，状态从头开始
+
+---
+
+### 2025-12-22 - 游戏流程问题修复 v3
 
 **修改文件**: `game_loop_v3.py`, `api/fixed_event_manager.py`, `events/fixed_events.yaml`, `world_state/*.json`
 

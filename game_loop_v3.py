@@ -248,9 +248,75 @@ class GameLoopV3:
         self.pregenerated_responses: Dict = {}
         self.show_jp_text = False  # 是否显示日文（调试用）
 
+    def reset_game_state(self):
+        """重置游戏状态（每次Demo启动时自动调用）"""
+        print("[系统] 正在重置游戏状态...")
+
+        # 重置 current_day.json
+        initial_day_state = {
+            "chapter": 1,
+            "day": 1,
+            "period": "dawn",
+            "phase": "free_time",
+            "event_count": 0,
+            "daily_event_count": 0,
+            "alive_count": 13,
+            "dead_count": 0,
+            "investigation_count": 0,
+            "murderer_id": None,
+            "victim_id": None,
+            "crime_scene": None,
+            "case_status": "no_case",
+            "flags": {},
+            "triggered_events": [],
+            "next_event": None
+        }
+        save_json(self.project_root / "world_state" / "current_day.json", initial_day_state)
+
+        # 重置 character_states.json
+        character_states_path = self.project_root / "world_state" / "character_states.json"
+        character_states = load_json(character_states_path)
+
+        # 初始角色状态（基础stress/madness值）
+        initial_stats = {
+            "aima": {"stress": 10, "madness": 0, "emotion": "nervous"},
+            "hiro": {"stress": 30, "madness": 5, "emotion": "defiant"},
+            "anan": {"stress": 40, "madness": 0, "emotion": "terrified"},
+            "noah": {"stress": 15, "madness": 3, "emotion": "withdrawn"},
+            "reia": {"stress": 50, "madness": 2, "emotion": "anxious"},
+            "miria": {"stress": 10, "madness": 0, "emotion": "calm"},
+            "margo": {"stress": 5, "madness": 0, "emotion": "thoughtful"},
+            "nanoka": {"stress": 20, "madness": 1, "emotion": "quiet"},
+            "arisa": {"stress": 35, "madness": 5, "emotion": "irritated"},
+            "sherry": {"stress": 25, "madness": 2, "emotion": "curious"},
+            "hannah": {"stress": 5, "madness": 0, "emotion": "calm"},
+            "coco": {"stress": 15, "madness": 3, "emotion": "mysterious"},
+            "meruru": {"stress": 50, "madness": 0, "emotion": "apologetic"}
+        }
+
+        for char_id, state in character_states.items():
+            if char_id in initial_stats:
+                state["stress"] = initial_stats[char_id]["stress"]
+                state["madness"] = initial_stats[char_id]["madness"]
+                state["emotion"] = initial_stats[char_id]["emotion"]
+            state["location"] = "牢房区"
+            state["action"] = "刚刚醒来"
+            state["alive"] = True
+            state["status"] = "alive"
+            state["can_interact"] = True
+            state["is_murderer"] = False
+            state["is_victim"] = False
+            state["magic_revealed"] = False
+
+        save_json(character_states_path, character_states)
+        print("[系统] 游戏状态已重置完成")
+
     def run(self):
         """运行游戏"""
         display_header()
+
+        # ★ 每次启动时自动重置状态
+        self.reset_game_state()
 
         # 生成三天大纲
         print("\n[系统] 正在生成三天大纲...")
