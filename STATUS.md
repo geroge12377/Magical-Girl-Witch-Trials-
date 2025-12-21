@@ -6,6 +6,43 @@
 
 ## 更新日志
 
+### 2025-12-21 - 固定事件触发系统
+
+**新增文件**: `api/fixed_event_manager.py`
+**修改文件**: `game_loop_v3.py`, `api/__init__.py`
+
+**新增模块**: 固定事件管理器 (FixedEventManager)
+
+**1. FixedEventManager 类** (`api/fixed_event_manager.py`):
+- `get_pending_fixed_event()`: 获取当前应触发的固定事件
+- `mark_event_triggered()`: 标记事件已触发
+- `apply_event_outcomes()`: 应用事件结果到角色状态
+- `handle_event_transitions()`: 处理事件后的状态转换
+- `_check_trigger()`: 检查事件触发条件
+- `_evaluate_condition()`: 评估条件字符串
+
+**2. 支持的触发类型**:
+- `auto`: 自动触发（匹配日期+时段）
+- `event_count`: 事件计数达到指定值
+- `condition`: 条件触发（flag检查、madness检查等）
+- `after_event`: 在指定事件后触发
+
+**3. game_loop_v3.py 集成**:
+- 在 `game_turn()` 中添加固定事件检查
+- 新增 `display_fixed_event()`: 显示固定事件脚本
+- 新增 `_run_fixed_event()`: 执行固定事件流程
+- 新增 `_handle_event_branch()`: 处理事件分支
+
+**验收标准**:
+- ✅ 第一天 dawn 自动触发 `day1_awakening`
+- ✅ 第一天 morning 自动触发 `day1_morning_assembly`
+- ✅ 事件计数达到 3 时触发 `day1_lunch`
+- ✅ 固定事件的 outcomes 正确应用到角色状态
+- ✅ flags_set 正确设置到 current_day.json
+- ✅ next_day: true 正确推进到下一天
+
+---
+
 ### 2025-12-21 - 故事规划层 + 双语输出系统
 
 **新增文件**: `api/story_planner.py`, `world_state/chapter_outline.json`, `world_state/murder_prep.json`
@@ -109,8 +146,9 @@
 | 故事规划层 | `api/story_planner.py` | ✅ | 三天大纲 + 结局判定 |
 | 导演规划层 | `api/director_planner.py` | ✅ | 生成ScenePlan，包含多个Beat |
 | 角色演出层 | `api/character_actor.py` | ✅ | 根据Beat生成对话（双语输出） |
+| 固定事件管理 | `api/fixed_event_manager.py` | ✅ | 固定事件触发系统 |
 | API模块导出 | `api/__init__.py` | ✅ | 导出核心类 |
-| v3游戏循环 | `game_loop_v3.py` | ✅ | 三层架构主循环 |
+| v3游戏循环 | `game_loop_v3.py` | ✅ | 三层架构主循环 + 固定事件 |
 | 规划层Prompt | `prompts/director_planner_prompt.txt` | ✅ | 规划层prompt模板 |
 | 演出层Prompt | `prompts/character_actor_prompt.txt` | ✅ | 演出层prompt模板（双语） |
 
