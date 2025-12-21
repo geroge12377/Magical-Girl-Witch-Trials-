@@ -1,10 +1,67 @@
 # 项目状态追踪
 
-> 最后更新：2025-12-21
+> 最后更新：2025-12-22
 
 ---
 
 ## 更新日志
+
+### 2025-12-22 - 橘雪莉角色设定修正
+
+**修改文件**: `characters/sherry/personality.yaml`, `characters/sherry/speech.yaml`
+
+**问题**: AI 生成的雪莉台词风格错误（冷血研究者 → 应为天真活宝）
+
+**修复内容**:
+
+1. **personality.yaml**:
+   - 移除「一切の道徳心を持たない」「死体を見ても平然」
+   - 改为「天真爛漫」「元気いっぱい」「ムードメーカー」
+   - 新增 trait「場を和ませようとする」
+
+2. **speech.yaml**:
+   - 新增 verbal_tics：「わあ！」「すごい！」「面白そう！」
+   - 新增 emotion：`curious`（好奇时的说话方式）
+   - 新增 example_lines：
+     - `comforting`: 安慰他人
+     - `about_mystery`: 关于谜题
+     - `awkward_timing`: 不合时宜的发言（角色特点）
+     - `seeing_corpse`: 看到尸体时的反应
+   - 移除旧的 `about_corpse`（"我见惯了"）
+
+**验收标准**:
+- ✅ 雪莉台词应为："哇！好有趣！"
+- ✅ 安慰时说："没事的没事的！大家一起想办法吧！"
+- ✅ 不应出现："真有研究价值"、"精彩的崩溃"等学术腔
+
+---
+
+### 2025-12-22 - 固定事件触发系统 v2 修复
+
+**修改文件**: `events/fixed_events.yaml`, `api/fixed_event_manager.py`, `world_state/current_day.json`, `world_state/character_states.json`
+
+**问题**:
+1. 固定事件未触发（day1_awakening 在 dawn 未显示）
+2. 角色状态残留（madness 8-13，应为 0-5）
+
+**修复内容**:
+
+1. **fixed_events.yaml**:
+   - 修正 `phase: "dawn"` → `period: "dawn"`（dawn 是时段不是阶段）
+   - 修正 `next_phase: "morning"` → `next_period: "morning"`
+
+2. **fixed_event_manager.py**:
+   - 添加调试输出到 `get_pending_fixed_event()`
+   - 添加 `next_period` 支持到 `handle_event_transitions()`
+
+3. **current_day.json**: 重置为初始状态
+4. **character_states.json**: 重置所有角色 madness 为 0-5
+
+**关键区分**:
+- `period`: 时段（dawn, morning, noon, afternoon, evening, night）
+- `phase`: 阶段（free_time, investigation, trial, ending）
+
+---
 
 ### 2025-12-21 - 固定事件触发系统
 
