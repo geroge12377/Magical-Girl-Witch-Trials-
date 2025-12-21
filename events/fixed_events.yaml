@@ -44,7 +44,7 @@ fixed_events:
     trigger:
       type: "auto"
       day: 1
-      phase: "dawn"
+      period: "dawn"
     priority: 100
     scene:
       location: "牢房区"
@@ -62,7 +62,7 @@ fixed_events:
     outcomes:
       player:
         stress: 5
-    next_phase: "morning"
+    next_period: "morning"
 
   day1_morning_assembly:
     id: "day1_morning"
@@ -70,7 +70,7 @@ fixed_events:
     trigger:
       type: "auto"
       day: 1
-      phase: "morning"
+      period: "morning"
     priority: 100
     scene:
       location: "食堂"
@@ -276,7 +276,7 @@ fixed_events:
     trigger:
       type: "auto"
       day: 2
-      phase: "morning"
+      period: "morning"
     priority: 100
     scene:
       location: "食堂"
@@ -442,7 +442,7 @@ fixed_events:
     trigger:
       type: "auto"
       day: 3
-      phase: "morning"
+      period: "morning"
     priority: 100
     scene:
       location: "食堂"

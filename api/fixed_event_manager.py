@@ -80,17 +80,23 @@ class FixedEventManager:
         phase = state.get("phase", "free_time")
         event_count = state.get("event_count", 0)
         flags = state.get("flags", {})
-
-        # 检查是否有 next_event 指定
         next_event = state.get("next_event")
+
+        # 调试输出
+        print(f"[FixedEventManager] 当前状态: day={day}, period={period}, phase={phase}, event_count={event_count}")
+        print(f"[FixedEventManager] 已触发事件: {triggered}")
+        print(f"[FixedEventManager] next_event: {next_event}")
+
+        # 1. 如果有指定的 next_event，优先检查它
         if next_event:
             events = self.events.get("fixed_events", {})
-            if next_event in events:
+            if next_event in events and next_event not in triggered:
                 event_data = events[next_event].copy()
                 event_data["_event_id"] = next_event
+                print(f"[FixedEventManager] 触发 next_event: {next_event}")
                 return event_data
 
-        # 遍历所有固定事件，找优先级最高的可触发事件
+        # 2. 遍历所有固定事件，找优先级最高的可触发事件
         candidates = []
         events = self.events.get("fixed_events", {})
 
@@ -103,15 +109,18 @@ class FixedEventManager:
             if self._check_trigger(event_data, day, period, phase, event_count, flags):
                 priority = event_data.get("priority", 0)
                 candidates.append((priority, event_id, event_data))
+                print(f"[FixedEventManager] 候选事件: {event_id} (priority={priority})")
 
-        # 按优先级排序，返回最高的
+        # 3. 按优先级排序，返回最高的
         if candidates:
             candidates.sort(key=lambda x: x[0], reverse=True)
             _, event_id, event_data = candidates[0]
             result = event_data.copy()
-            result["_event_id"] = event_id  # 附加 event_id
+            result["_event_id"] = event_id
+            print(f"[FixedEventManager] 选中事件: {event_id}")
             return result
 
+        print(f"[FixedEventManager] 无可触发的固定事件")
         return None
 
     def _check_trigger(
@@ -284,6 +293,7 @@ class FixedEventManager:
         """处理事件后的状态转换"""
         result = {
             "next_phase": event_data.get("next_phase"),
+            "next_period": event_data.get("next_period"),
             "next_day": event_data.get("next_day", False),
             "next_event": event_data.get("next_event"),
             "game_over": event_data.get("game_over", False),
@@ -294,11 +304,19 @@ class FixedEventManager:
         day_path = self.project_root / "world_state" / "current_day.json"
         current_day = load_json(day_path)
 
+        # 更新阶段（phase: free_time, investigation, trial, ending）
         if result["next_phase"]:
             current_day["phase"] = result["next_phase"]
+            print(f"[FixedEventManager] 阶段变更: {result['next_phase']}")
+
+        # 更新时段（period: dawn, morning, noon, afternoon, evening, night）
+        if result["next_period"]:
+            current_day["period"] = result["next_period"]
+            print(f"[FixedEventManager] 时段变更: {result['next_period']}")
 
         if result["next_event"]:
             current_day["next_event"] = result["next_event"]
+            print(f"[FixedEventManager] 设置 next_event: {result['next_event']}")
         else:
             current_day["next_event"] = None
 
@@ -306,12 +324,11 @@ class FixedEventManager:
             current_day["day"] = current_day.get("day", 1) + 1
             current_day["period"] = "dawn"
             current_day["daily_event_count"] = 0
-            # 重置 next_event（新的一天应该重新检查事件）
             current_day["next_event"] = None
+            print(f"[FixedEventManager] 进入新的一天: day={current_day['day']}")
 
         # 处理 trigger_summary（如果有）
         if event_data.get("trigger_summary"):
-            # 可以在这里添加总结显示逻辑
             pass
 
         save_json(day_path, current_day)
