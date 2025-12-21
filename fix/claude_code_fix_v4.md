@@ -592,3 +592,17 @@ night: day1_night → (next_day)
 | `world_state/current_day.json` | 由 `reset_game_state()` 自动重置 |
 | `world_state/character_states.json` | 由 `reset_game_state()` 自动重置 |
 | `STATUS.md` | 添加更新日志 |
+
+---
+
+## ✅ 完成状态
+
+**完成日期**: 2025-12-22
+
+**实际修改**:
+- ✅ `game_loop_v3.py` - 添加 `reset_game_state()` 方法，在 `run()` 启动时自动调用
+- ✅ `STATUS.md` - 添加 v4 更新日志
+
+**注意**: 任务 1-5 的大部分内容已在 v3 修复中完成。v4 主要新增 Demo 自动重置功能（任务 6）。
+
+**GitHub 提交**: `5c2bcac` - "fix: v4 Demo自动重置 - 新增 reset_game_state()"
