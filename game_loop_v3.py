@@ -417,9 +417,13 @@ class GameLoopV3:
         # 6. 显示场景规划
         display_scene_plan(scene_plan)
 
-        # 7. 一次性生成所有 Beat 的对话
+        # 7. 一次性生成所有 Beat 的对话和预选回应（v6优化：零延迟）
         print("\n[角色] 正在演出...")
-        all_dialogues = self.actor.generate_scene_dialogue(scene_plan)
+        all_dialogues, pregenerated_responses = self.actor.generate_scene_dialogue(scene_plan)
+
+        # ★ 保存预生成的回应（提前生成，无需在选择点等待）
+        if pregenerated_responses:
+            self.pregenerated_responses = pregenerated_responses
 
         # 8. 逐个显示 Beat
         for i, beat in enumerate(scene_plan.beats):
@@ -435,13 +439,7 @@ class GameLoopV3:
             # 检查是否是玩家选择点
             if scene_plan.player_choice_point:
                 if scene_plan.player_choice_point.get("after_beat") == beat.beat_id:
-                    # 预生成选项回应
-                    print("\n[系统] 预生成选项回应...")
-                    self.pregenerated_responses = self.actor.generate_choice_responses(
-                        scene_plan.player_choice_point,
-                        beat.characters
-                    )
-
+                    # ★ v6优化：使用提前生成的回应，零延迟
                     # 显示选项并处理玩家选择
                     self._handle_player_choice(scene_plan.player_choice_point, beat.characters)
 

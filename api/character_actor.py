@@ -12,7 +12,7 @@ import anthropic
 import json
 import yaml
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 import sys
 
@@ -448,15 +448,20 @@ class CharacterActor:
             "C": ChoiceResponse("C", [DialogueLine(char_id, "...什么？", "...何？", "nervous")], {"stress": 5})
         }
 
-    def generate_scene_dialogue(self, scene_plan: ScenePlan) -> List[DialogueOutput]:
+    def generate_scene_dialogue(
+        self,
+        scene_plan: ScenePlan
+    ) -> Tuple[List[DialogueOutput], Optional[Dict[str, ChoiceResponse]]]:
         """
-        一次性生成整个场景的所有对话（单次 API 调用）
+        一次性生成整个场景的所有对话和预选回应（优化延迟）
 
         输入：ScenePlan（包含所有 Beat）
-        输出：整场景的对话列表 List[DialogueOutput]
+        输出：Tuple[List[DialogueOutput], Optional[Dict[str, ChoiceResponse]]]
+            - 整场景的对话列表
+            - 预选回应字典（如果有选择点），否则为 None
         """
         if not scene_plan.beats:
-            return []
+            return [], None
 
         # 收集所有角色信息
         all_characters = set()
@@ -479,9 +484,10 @@ class CharacterActor:
         # 构建整场景的 prompt
         prompt = self._build_scene_prompt(scene_plan, characters_info)
 
-        # 单次 API 调用
+        # 单次 API 调用生成对话
+        dialogue_outputs = []
         try:
-            print(f"  [CharacterActor] 一次性生成 {len(scene_plan.beats)} 个 Beat 的对话...")
+            print(f"  [CharacterActor] 正在生成 {len(scene_plan.beats)} 个 Beat 的对话...")
             response = self.client.messages.create(
                 model=MODEL,
                 max_tokens=4096,  # 增大 token 限制以容纳整场对话
@@ -489,18 +495,55 @@ class CharacterActor:
             )
 
             raw_text = response.content[0].text
-            print(f"  [CharacterActor] API 响应长度: {len(raw_text)} 字符")
+            print(f"  [CharacterActor] 对话生成完成 (响应长度: {len(raw_text)} 字符)")
 
             # 解析整场对话
             result = parse_json_with_diagnostics(raw_text, "场景对话", "CharacterActor")
-            return self._parse_scene_dialogue(result, scene_plan.beats)
+            dialogue_outputs = self._parse_scene_dialogue(result, scene_plan.beats)
 
         except json.JSONDecodeError as e:
             print(f"[CharacterActor] JSON 解析失败，使用回退对话")
-            return self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
+            dialogue_outputs = self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
         except Exception as e:
             print(f"[CharacterActor] API 调用失败: {type(e).__name__}: {e}")
-            return self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
+            dialogue_outputs = self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
+
+        # ★ 新增：如果有选择点，同时生成预选回应
+        choice_responses = None
+        if scene_plan.player_choice_point:
+            print(f"  [CharacterActor] 正在生成预选回应...")
+            # 获取选择点后的主要角色
+            characters = self._get_choice_responders(scene_plan)
+            choice_responses = self.generate_choice_responses(
+                scene_plan.player_choice_point,
+                characters
+            )
+            print(f"  [CharacterActor] 预选回应生成完成")
+
+        return dialogue_outputs, choice_responses
+
+    def _get_choice_responders(self, scene_plan: ScenePlan) -> List[str]:
+        """获取选择点的回应角色"""
+        # 找到选择点之后的 beat，获取其角色
+        choice_point = scene_plan.player_choice_point
+        after_beat = choice_point.get("after_beat", "")
+
+        # 遍历 beats 找到对应的角色
+        for i, beat in enumerate(scene_plan.beats):
+            if beat.beat_id == after_beat and beat.characters:
+                return beat.characters
+
+        # 回退：使用最后一个 beat 的角色
+        if scene_plan.beats and scene_plan.beats[-1].characters:
+            return scene_plan.beats[-1].characters
+
+        # 最后回退：使用所有出现过的角色
+        all_chars = []
+        for beat in scene_plan.beats:
+            for char in beat.characters:
+                if char not in all_chars:
+                    all_chars.append(char)
+        return all_chars[:1] if all_chars else []
 
     def _build_scene_prompt(self, scene_plan: ScenePlan, characters_info: Dict) -> str:
         """构建整场景的 prompt（双语输出）"""
