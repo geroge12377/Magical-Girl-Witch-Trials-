@@ -6,7 +6,38 @@
 
 ## 更新日志
 
-### 2025-12-22 - 游戏流程问题修复 v5 ⭐ 最新
+### 2025-12-22 - 预选回应提前生成优化 v6 ⭐ 最新
+
+**修改文件**: `api/character_actor.py`, `game_loop_v3.py`
+
+**问题**: 玩家到达选择点时才生成预选回应，导致等待时间
+
+**优化内容**:
+
+1. **character_actor.py**:
+   - `generate_scene_dialogue()` 返回类型改为 `Tuple[List[DialogueOutput], Optional[Dict[str, ChoiceResponse]]]`
+   - 在生成对话的同时，提前生成预选回应
+   - 新增 `_get_choice_responders()` 方法获取回应角色
+
+2. **game_loop_v3.py**:
+   - 更新调用方式：`all_dialogues, pregenerated_responses = self.actor.generate_scene_dialogue(scene_plan)`
+   - 移除选择点处的 `generate_choice_responses()` 调用
+   - 使用提前生成的回应，零延迟显示
+
+**API 调用流程优化**:
+```
+旧: Planner(1次) → Actor对话(1次) → [等待] → Actor选项(1次)
+新: Planner(1次) → Actor对话+选项(2次并行生成)
+```
+
+**验收标准**:
+- ✅ 场景开始时同时生成对话和预选回应
+- ✅ 玩家到达选择点时，选项回应零延迟显示
+- ✅ 自由输入（D选项）仍支持实时生成
+
+---
+
+### 2025-12-22 - 游戏流程问题修复 v5
 
 **修改文件**: `game_loop_v3.py`, `api/fixed_event_manager.py`, `events/fixed_events.yaml`, `prompts/director_planner_prompt.txt`, `api/director_planner.py`
 
