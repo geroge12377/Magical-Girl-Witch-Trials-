@@ -1,15 +1,19 @@
 # config.py - 项目配置文件
 # 支持多个API Key和缓存机制
 
+import os
 from pathlib import Path
 
 # ============================================
-# API配置 - 填入你的API Key
+# API配置 - 从环境变量读取，或设置为空字符串
+# 请在运行前设置环境变量 ANTHROPIC_API_KEY
 # ============================================
+_DEFAULT_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
 API_KEYS = {
-    "",   # 角色API用
-    "",    # 导演API用
-    "controller": ""   # 中控API用
+    "character": os.environ.get("ANTHROPIC_API_KEY_CHARACTER", _DEFAULT_API_KEY),   # 角色API用
+    "director": os.environ.get("ANTHROPIC_API_KEY_DIRECTOR", _DEFAULT_API_KEY),     # 导演API用
+    "controller": os.environ.get("ANTHROPIC_API_KEY_CONTROLLER", _DEFAULT_API_KEY)  # 中控API用
 }
 
 # 模型配置

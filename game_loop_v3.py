@@ -348,6 +348,7 @@ class GameLoopV3:
 
         # 0. 加载当前状态
         current_day_data = load_json(self.project_root / "world_state" / "current_day.json")
+        print(f"[DEBUG] game_turn() 开始: day={current_day_data.get('day')}, period={current_day_data.get('period')}, event_count={current_day_data.get('event_count')}")
 
         # 检查是否已结束
         if current_day_data.get("phase") == "ending":
@@ -495,6 +496,7 @@ class GameLoopV3:
         current_day = load_json(day_path)
 
         period = current_day.get("period", "dawn")
+        print(f"[DEBUG] advance_time() 调用前: period={period}")
 
         try:
             idx = PERIODS.index(period)
@@ -503,8 +505,9 @@ class GameLoopV3:
 
         if idx < len(PERIODS) - 1:
             # 推进到下一时段
-            current_day["period"] = PERIODS[idx + 1]
-            print(f"\n[时间流逝] -> {PERIOD_NAMES.get(PERIODS[idx + 1], PERIODS[idx + 1])}")
+            next_period = PERIODS[idx + 1]
+            current_day["period"] = next_period
+            print(f"\n[时间流逝] -> {PERIOD_NAMES.get(next_period, next_period)}")
         else:
             # night结束，进入下一天
             current_day["day"] = current_day.get("day", 1) + 1
@@ -519,7 +522,9 @@ class GameLoopV3:
                 self.handle_ending(ending)
                 return
 
+        # ★ 关键：确保保存到文件
         save_json(day_path, current_day)
+        print(f"[DEBUG] advance_time() 调用后: period={current_day.get('period')}")
 
     def _check_madness_murder(self):
         """检查是否有角色madness过高触发杀人"""

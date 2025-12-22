@@ -369,10 +369,26 @@ class DirectorPlanner:
             )
             beats.append(beat)
 
+        # ★ 获取场景名称并验证
+        scene_name = result.get("scene_name", "未命名场景")
+
+        # ★ 验证场景名称不包含其他地点
+        other_locations = ["图书室", "图书馆", "食堂", "庭院", "走廊", "牢房区"]
+        for other in other_locations:
+            if other != location and other in scene_name:
+                print(f"[DirectorPlanner] 警告: 场景名称'{scene_name}'包含其他地点'{other}'，修正为'{location}的场景'")
+                scene_name = f"{location}的场景"
+                break
+
+        # ★ 验证API返回的地点与目标地点是否一致
+        api_location = result.get("location", location)
+        if api_location != location:
+            print(f"[DirectorPlanner] 警告: 场景地点不匹配，强制修正 {api_location} -> {location}")
+
         return ScenePlan(
             scene_id=result.get("scene_id", f"scene_{location}"),
-            scene_name=result.get("scene_name", "未命名场景"),
-            location=location,
+            scene_name=scene_name,
+            location=location,  # ★ 强制使用目标地点
             time_estimate_minutes=result.get("time_estimate_minutes", 5),
             total_beats=len(beats),
             beats=beats,

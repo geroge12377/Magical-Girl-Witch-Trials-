@@ -184,9 +184,14 @@ class FixedEventManager:
             required_count = trigger.get("count", 0)
             trigger_day = trigger.get("day")
             trigger_phase = trigger.get("phase", "free_time")
+            trigger_period = trigger.get("period")  # ★ 新增：时段检查
 
             # 日期必须匹配（如果指定了）
             if trigger_day is not None and trigger_day != day:
+                return False
+
+            # ★ 时段必须匹配（如果指定了）
+            if trigger_period is not None and trigger_period != period:
                 return False
 
             # 阶段必须匹配
@@ -205,7 +210,7 @@ class FixedEventManager:
 
         return False
 
-    def _evaluate_condition(self, condition: str, flags: Dict) -> bool:
+    def _evaluate_condition(self, condition: str, flags: Dict = None) -> bool:
         """
         评估条件字符串
 
@@ -213,10 +218,14 @@ class FixedEventManager:
         - flag_xxx: 检查 flags["xxx"] == True
         - highest_madness_above_70: 检查最高 madness > 70
         - day3_night_no_murder: 第三天夜晚且无杀人
+        - 复杂表达式: "event_count >= 3 and period == 'noon'"
         - 等等
         """
         if not condition:
             return True
+
+        if flags is None:
+            flags = {}
 
         # flag 检查
         if condition.startswith("flag_"):
@@ -244,6 +253,34 @@ class FixedEventManager:
         if condition == "player_at_library":
             # 需要外部传入玩家位置，这里简化处理
             return False
+
+        # ★ 新增：支持复杂条件表达式（如 "event_count >= 3 and period == 'noon'"）
+        if " and " in condition or " or " in condition or ">=" in condition or "==" in condition:
+            try:
+                # 构建评估上下文
+                current_day_data = self._load_current_state()
+                char_states = self._load_character_states()
+
+                context = {
+                    "day": current_day_data.get("day", 1),
+                    "period": current_day_data.get("period", "dawn"),
+                    "phase": current_day_data.get("phase", "free_time"),
+                    "event_count": current_day_data.get("event_count", 0),
+                    "flags": flags,
+                }
+
+                # 添加角色状态变量
+                for char_id, state in char_states.items():
+                    context[f"{char_id}_stress"] = state.get("stress", 0)
+                    context[f"{char_id}_madness"] = state.get("madness", 0)
+                    context[f"{char_id}_alive"] = state.get("alive", True)
+
+                # 安全评估（禁用内置函数）
+                result = eval(condition, {"__builtins__": {}}, context)
+                return bool(result)
+            except Exception as e:
+                print(f"[FixedEventManager] 条件评估失败: {condition}, 错误: {e}")
+                return False
 
         # 默认返回 False
         return False

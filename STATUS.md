@@ -6,7 +6,57 @@
 
 ## 更新日志
 
-### 2025-12-22 - 游戏流程问题修复 v4（Demo自动重置）⭐ 最新
+### 2025-12-22 - 游戏流程问题修复 v5 ⭐ 最新
+
+**修改文件**: `game_loop_v3.py`, `api/fixed_event_manager.py`, `events/fixed_events.yaml`, `prompts/director_planner_prompt.txt`, `api/director_planner.py`
+
+**问题**:
+1. 时段卡在 morning：自由探索后时段没有正确推进
+2. 午餐/晚餐触发时机错误：只检查 event_count，没有检查 period
+3. 场景规划与地点不匹配：DirectorPlanner 生成的场景名称与实际地点无关
+
+**修复内容**:
+
+1. **game_loop_v3.py**:
+   - `advance_time()`: 添加调试日志，确保时段变更正确保存到 JSON 文件
+   - `game_turn()`: 添加调试日志显示当前状态
+
+2. **fixed_events.yaml**:
+   - `day1_lunch`: 触发条件新增 `period: "noon"`（必须在正午时段触发）
+   - `day1_dinner`: 触发条件新增 `period: "evening"`（必须在傍晚时段触发）
+
+3. **fixed_event_manager.py**:
+   - `_check_trigger()`: event_count 类型支持 period 检查
+   - `_evaluate_condition()`: 支持 period 变量和复杂条件表达式（如 `event_count >= 3 and period == 'noon'`）
+
+4. **director_planner_prompt.txt**:
+   - 在开头添加【重要】地点强调说明
+   - 强调场景名称必须与地点相关
+   - 禁止在场景名称中提及其他地点
+
+5. **director_planner.py**:
+   - `_parse_scene_plan()`: 验证场景名称不包含其他地点
+   - 如果场景名称包含错误地点，自动修正为 `{location}的场景`
+   - 强制使用目标地点，不使用API返回的地点
+
+**预期流程**:
+```
+morning: 固定事件链 → NPC分散 → 自由探索 → advance_time()
+noon: 自由探索 → day1_lunch (event_count>=3 AND period==noon) → 自由探索 → advance_time()
+afternoon: 自由探索 → advance_time()
+evening: 自由探索 → day1_dinner (event_count>=6 AND period==evening) → advance_time()
+night: day1_night → next_day
+```
+
+**验收标准**:
+- ✅ 自由探索后时段正确推进 (morning→noon→afternoon→evening→night)
+- ✅ day1_lunch 在 noon 时段触发
+- ✅ day1_dinner 在 evening 时段触发
+- ✅ 场景规划名称与实际地点匹配
+
+---
+
+### 2025-12-22 - 游戏流程问题修复 v4（Demo自动重置）
 
 **修改文件**: `game_loop_v3.py`
 

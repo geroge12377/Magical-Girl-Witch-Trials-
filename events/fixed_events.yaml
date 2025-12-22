@@ -202,6 +202,7 @@ fixed_events:
       type: "event_count"
       day: 1
       count: 3
+      period: "noon"  # ★ 新增：必须在noon时段触发
       phase: "free_time"
     priority: 90
     scene:
@@ -226,6 +227,7 @@ fixed_events:
       type: "event_count"
       day: 1
       count: 6
+      period: "evening"  # ★ 新增：必须在evening时段触发
       phase: "free_time"
     priority: 90
     scene:
