@@ -6,7 +6,46 @@
 
 ## 更新日志
 
-### 2025-12-22 - 预选回应提前生成优化 v6 ⭐ 最新
+### 2025-12-22 - API 认证错误修复 v7 ⭐ 最新
+
+**修改文件**: `config.py`, `.gitignore`, `config_local.py.example`
+
+**问题**: API 调用时出现认证错误 "Could not resolve authentication method"
+
+**原因**: 环境变量未设置时，API key 为空字符串导致认证失败
+
+**修复内容**:
+
+1. **config.py**:
+   - 添加 `config_local.py` 支持（本地开发用）
+   - 优先级: 环境变量 > config_local.py > 报错
+   - `get_api_key()` 添加验证，无 key 时抛出清晰错误信息
+
+2. **config_local.py.example**:
+   - 新增模板文件，用户复制为 `config_local.py` 填入 API key
+
+3. **.gitignore**:
+   - 添加 `config_local.py` 防止泄露 API key
+
+**使用方式**:
+```
+方式1: 设置环境变量
+  Windows: set ANTHROPIC_API_KEY=sk-ant-api03-xxx
+  Linux/Mac: export ANTHROPIC_API_KEY=sk-ant-api03-xxx
+
+方式2: 创建 config_local.py
+  复制 config_local.py.example 为 config_local.py
+  填入你的 API Key
+```
+
+**验收标准**:
+- ✅ 无 API key 时显示清晰错误信息
+- ✅ 支持环境变量和本地配置文件两种方式
+- ✅ config_local.py 不会被上传到 git
+
+---
+
+### 2025-12-22 - 预选回应提前生成优化 v6
 
 **修改文件**: `api/character_actor.py`, `game_loop_v3.py`
 
