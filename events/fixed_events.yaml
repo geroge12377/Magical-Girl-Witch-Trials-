@@ -195,6 +195,9 @@ fixed_events:
     next_phase: "free_time"
     trigger_npc_scatter: true
 
+  # ============================================================================
+  # 第1天午餐 - v10扩充版
+  # ============================================================================
   day1_lunch:
     id: "day1_lunch"
     name: "第一天午餐"
@@ -202,7 +205,7 @@ fixed_events:
       type: "event_count"
       day: 1
       count: 3
-      period: "noon"  # ★ 新增：必须在noon时段触发
+      period: "noon"
       phase: "free_time"
     priority: 90
     scene:
@@ -211,15 +214,50 @@ fixed_events:
       description: "午餐时间，全员聚集"
     script:
       - speaker: "narrator"
-        text_cn: "午餐时间到了，所有人聚集在食堂..."
+        text_cn: |
+          午餐时间的铃声响起，回荡在走廊里。
+
+          少女们陆续来到食堂，在长桌两侧坐下。
+          简陋的餐盘被一一端上——米饭、味噌汤、几片腌菜。
+
+          没有人说话。只有餐具轻轻碰撞的声音。
+
+      - speaker: "sherry"
+        text_cn: "呜哇...这就是我们的午餐吗？好朴素啊..."
+        emotion: "disappointed"
+
+      - speaker: "reia"
+        text_cn: "至少还有东西吃，就别抱怨了。"
+        emotion: "calm"
+
       - speaker: "narrator"
-        text_cn: "简陋的饭菜被端上桌，气氛依然沉重。"
+        text_cn: |
+          雪莉撅起嘴，但还是乖乖地拿起筷子。
+
+          汉娜用优雅的姿势夹起一片腌菜，放入口中。
+          她的表情没有变化，但你注意到她的筷子在微微颤抖。
+
+      - speaker: "hiro"
+        text_cn: "......"
+        emotion: "defiant"
+        action: "一个人坐在角落，背对着所有人"
+
+      - speaker: "narrator"
+        text_cn: |
+          希罗独自坐在长桌的尽头，和其他人保持着距离。
+          她的背影看起来比早上更加僵硬。
+
+          午餐时间就这样沉默地过去了。
+
     allow_free_events: true
     outcomes:
       all:
-        stress: 3
+        stress: 2
     next_phase: "free_time"
 
+  # ============================================================================
+  # 第1天晚餐 - v10扩充版
+  # ============================================================================
   day1_dinner:
     id: "day1_dinner"
     name: "第一天晚餐"
@@ -227,7 +265,7 @@ fixed_events:
       type: "event_count"
       day: 1
       count: 6
-      period: "evening"  # ★ 新增：必须在evening时段触发
+      period: "evening"
       phase: "free_time"
     priority: 90
     scene:
@@ -236,13 +274,60 @@ fixed_events:
       description: "晚餐时间"
     script:
       - speaker: "narrator"
-        text_cn: "晚餐时间。今天的第一天即将结束..."
+        text_cn: |
+          傍晚的铃声响起时，天边已经染上了橘红色。
+
+          晚餐和午餐一样简朴——或许更简朴。
+          但经过一天的紧张，没有人有心思抱怨。
+
+      - speaker: "miria"
+        text_cn: "呼...总算能坐下来歇一歇了。"
+        emotion: "tired"
+        action: "重重地坐到椅子上"
+
+      - speaker: "meruru"
+        text_cn: "大、大家今天辛苦了..."
+        emotion: "nervous"
+        action: "小声地说，不敢看任何人的眼睛"
+
       - speaker: "narrator"
-        text_cn: "少女们的脸上写满疲惫与不安。"
+        text_cn: |
+          梅露露的声音几乎被餐具的声音淹没。
+
+          诺亚坐在窗边，望着渐暗的天空，筷子一直没有动。
+          她的眼神似乎在追逐着什么远方的东西。
+
+      - speaker: "reia"
+        text_cn: "诺亚，不吃点东西吗？"
+        emotion: "concerned"
+
+      - speaker: "noah"
+        text_cn: "...天空的颜色，很难画出来呢。"
+        emotion: "distant"
+
+      - speaker: "narrator"
+        text_cn: |
+          蕾雅欲言又止，最终只是轻轻叹了口气。
+
+          第一天即将结束。
+          少女们的脸上写满了疲惫、不安，还有一丝——对明天的恐惧。
+
+      - speaker: "arisa"
+        text_cn: "...真是无聊透顶。"
+        emotion: "irritated"
+        action: "把筷子往桌上一放"
+
+      - speaker: "narrator"
+        text_cn: |
+          爱丽莎站起身，头也不回地走出了食堂。
+          没有人试图阻止她。
+
     allow_free_events: true
     outcomes:
+      noah:
+        stress: 3
       all:
-        stress: 2
+        stress: 1
     next_phase: "free_time"
 
   day1_night:

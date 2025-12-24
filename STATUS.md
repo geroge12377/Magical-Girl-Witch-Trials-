@@ -6,7 +6,67 @@
 
 ## 更新日志
 
-### 2025-12-24 - 世界观库 & 事件树重构 v9 ⭐ 最新
+### 2025-12-24 - 测试问题修复 v10 ⭐ 最新
+
+**问题来源**: 2025-12-24 测试日志发现以下问题
+
+| 问题 | 严重度 | 修复状态 |
+|------|:------:|:--------:|
+| 场景内容为空 | 高 | ✅ 已修复 |
+| NPC 不移动 | 高 | ✅ 已修复 |
+| 幻觉角色名 | 高 | ✅ 已修复 |
+| 地点描写不匹配 | 中 | ✅ 已修复 |
+| 固定事件太短 | 中 | ✅ 已修复 |
+
+**修改文件**:
+- 修改 `api/character_actor.py` - 空内容检测+重试、角色名验证、地点一致性
+- 修改 `game_loop_v3.py` - NPC自动移动系统
+- 修改 `events/fixed_events.yaml` - 扩充午餐/晚餐脚本
+- 修改 `prompts/character_actor_prompt.txt` - 角色名白名单
+- 新增 `worlds/witch_trial/npc_behavior.yaml` - NPC行为配置
+
+**核心功能**:
+
+1. **空内容检测 (character_actor.py)**:
+   - `_check_empty_beats()`: 检测空Beat
+   - 自动重试2次
+   - `_fill_empty_beats_with_fallback()`: 回退内容填充
+
+2. **幻觉角色名修正**:
+   - `VALID_CHARACTERS`: 13名角色白名单
+   - `HALLUCINATION_PATTERNS`: 常见幻觉名列表
+   - `_validate_character_names()`: 检测无效名
+   - `_fix_invalid_names()`: 替换为有效名或代词
+   - Prompt增加角色名白名单
+
+3. **地点一致性验证**:
+   - `LOCATION_KEYWORDS`: 地点关键词
+   - `LOCATION_CONFLICTS`: 地点冲突词
+   - `_validate_location_consistency()`: 检测地点冲突
+   - `_fix_location_references()`: 替换错误地点词
+   - Prompt增加地点一致性要求
+
+4. **NPC自动移动系统 (game_loop_v3.py)**:
+   - `_load_npc_behavior()`: 加载NPC行为配置
+   - `_maybe_move_npcs(period)`: 时段变化时移动NPC
+   - `_select_npc_destination()`: 根据偏好选择目的地
+   - `npc_behavior.yaml`: 每个角色的位置偏好
+
+5. **固定事件扩充 (fixed_events.yaml)**:
+   - `day1_lunch`: 从2句扩充至10+行，含多角色互动
+   - `day1_dinner`: 从2句扩充至10+行，含场景描写
+
+**验收标准**:
+- ✅ 空 Beat 被检测并触发重试
+- ✅ 重试失败后使用回退内容
+- ✅ 不再出现"美咲""亚美"等幻觉名字
+- ✅ 走廊场景不再出现"图书馆"
+- ✅ 每个时段变化时约30%的NPC会移动
+- ✅ 午餐/晚餐事件有丰富的角色互动
+
+---
+
+### 2025-12-24 - 世界观库 & 事件树重构 v9
 
 **修改文件**:
 - 新增 `worlds/witch_trial/` 世界观库目录

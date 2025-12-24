@@ -1,9 +1,10 @@
 # ============================================================================
-# 游戏主循环 v3 - 三层导演架构 + 完整三天流程 + 世界观库v9
+# 游戏主循环 v3 - 三层导演架构 + 完整三天流程 + 世界观库v9 + NPC移动v10
 # ============================================================================
 # 架构：故事规划层 + 导演规划层 + 角色演出层 + 世界观库
 # 流程：大纲生成 → 时段循环 → 导演规划 → 角色演出 → 结局判定
 # 【v9新增】世界观约束、事件树引擎、场景验证
+# 【v10新增】NPC自动移动系统
 # ============================================================================
 
 import json
@@ -250,11 +251,88 @@ class GameLoopV3:
         self.world_loader = get_world_loader(project_root=self.project_root)
         self.event_engine = EventTreeEngine(self.world_loader, self.project_root)
 
+        # 【v10新增】NPC行为配置
+        self.npc_behavior = self._load_npc_behavior()
+
         self.player_location = "牢房区"
         self.running = True
         self.current_scene_plan: Optional[ScenePlan] = None
         self.pregenerated_responses: Dict = {}
         self.show_jp_text = False  # 是否显示日文（调试用）
+
+    def _load_npc_behavior(self) -> Dict:
+        """【v10新增】加载NPC行为配置"""
+        config_path = self.project_root / "worlds" / "witch_trial" / "npc_behavior.yaml"
+        if config_path.exists():
+            return load_yaml(config_path)
+        return {
+            "movement": {"base_chance": 0.3},
+            "location_preferences": {},
+            "all_locations": ["食堂", "牢房区", "图书室", "庭院", "走廊"]
+        }
+
+    def _maybe_move_npcs(self, period: str = "morning"):
+        """【v10新增】随机移动部分 NPC"""
+        states_path = self.project_root / "world_state" / "character_states.json"
+        states = load_json(states_path)
+
+        # 获取移动配置
+        movement_config = self.npc_behavior.get("movement", {})
+        base_chance = movement_config.get("base_chance", 0.3)
+        period_modifiers = movement_config.get("period_modifiers", {})
+        move_chance = period_modifiers.get(period, base_chance)
+
+        location_prefs = self.npc_behavior.get("location_preferences", {})
+        all_locations = self.npc_behavior.get("all_locations", ["食堂", "牢房区", "图书室", "庭院", "走廊"])
+
+        moved_chars = []
+
+        for char_id, state in states.items():
+            if char_id == "aima":  # 玩家不自动移动
+                continue
+            if state.get("status") != "alive":
+                continue
+
+            # 获取角色偏好
+            char_pref = location_prefs.get(char_id, {})
+            stay_chance = char_pref.get("stay_chance", 0)
+
+            # 如果角色倾向待在原地
+            if random.random() < stay_chance:
+                continue
+
+            # 概率移动
+            if random.random() < move_chance:
+                old_location = state.get("location", "牢房区")
+
+                # 根据偏好选择新位置
+                new_location = self._select_npc_destination(char_id, old_location, char_pref, all_locations)
+
+                if new_location != old_location:
+                    state["location"] = new_location
+                    moved_chars.append(char_id)
+
+        if moved_chars:
+            save_json(states_path, states)
+            print(f"[系统] {len(moved_chars)} 名角色移动了位置")
+
+    def _select_npc_destination(self, char_id: str, current_location: str, pref: Dict, all_locations: List[str]) -> str:
+        """【v10新增】根据角色偏好选择移动目的地"""
+        preferred = pref.get("preferred", [])
+        avoid = pref.get("avoid", [])
+
+        # 70% 去偏好地点，30% 随机
+        if preferred and random.random() < 0.7:
+            available = [loc for loc in preferred if loc != current_location and loc not in avoid]
+            if available:
+                return random.choice(available)
+
+        # 随机选择（排除当前位置和回避地点）
+        available = [loc for loc in all_locations if loc != current_location and loc not in avoid]
+        if available:
+            return random.choice(available)
+
+        return current_location
 
     def _display_arc_info(self, day: int):
         """【v9新增】显示当前arc阶段信息"""
@@ -563,11 +641,11 @@ class GameLoopV3:
         day_path = self.project_root / "world_state" / "current_day.json"
         current_day = load_json(day_path)
 
-        period = current_day.get("period", "dawn")
-        print(f"[DEBUG] advance_time() 调用前: period={period}")
+        old_period = current_day.get("period", "dawn")
+        print(f"[DEBUG] advance_time() 调用前: period={old_period}")
 
         try:
-            idx = PERIODS.index(period)
+            idx = PERIODS.index(old_period)
         except ValueError:
             idx = 0
 
@@ -576,12 +654,18 @@ class GameLoopV3:
             next_period = PERIODS[idx + 1]
             current_day["period"] = next_period
             print(f"\n[时间流逝] -> {PERIOD_NAMES.get(next_period, next_period)}")
+
+            # 【v10新增】时段变化时触发 NPC 移动
+            self._maybe_move_npcs(next_period)
         else:
             # night结束，进入下一天
             current_day["day"] = current_day.get("day", 1) + 1
             current_day["period"] = "dawn"
             current_day["daily_event_count"] = 0
             print(f"\n[新的一天] 第{current_day['day']}天开始了...")
+
+            # 【v10新增】新的一天开始时也移动 NPC
+            self._maybe_move_npcs("dawn")
 
             # 检查是否超过3天
             if current_day["day"] > 3:

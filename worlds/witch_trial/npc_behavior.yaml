@@ -1,0 +1,91 @@
+# ============================================================================
+# NPC 行为配置 - v10
+# ============================================================================
+# 控制 NPC 的自动移动行为和位置偏好
+# ============================================================================
+
+movement:
+  base_chance: 0.3        # 基础移动概率 (30%)
+  period_modifiers:
+    dawn: 0.2             # 黎明：刚醒来，少移动
+    morning: 0.4          # 上午：活跃
+    noon: 0.2             # 午餐时少移动
+    afternoon: 0.35       # 下午：正常
+    evening: 0.3          # 傍晚：正常
+    night: 0.1            # 夜晚：很少移动
+
+# 角色位置偏好
+location_preferences:
+  aima:
+    preferred: [牢房区, 走廊]
+    avoid: []
+    stay_chance: 0.3      # 比较活跃，会到处走
+
+  hiro:
+    preferred: [走廊, 庭院]
+    avoid: [食堂]         # 不喜欢人多的地方
+    roaming: true         # 巡逻型
+
+  anan:
+    preferred: [图书室, 牢房区]
+    avoid: [食堂, 庭院]   # 不喜欢人多
+    stay_chance: 0.5      # 比较安静
+
+  noah:
+    preferred: [图书室, 庭院]
+    avoid: []
+    stay_chance: 0.6      # 专注画画，常待原地
+
+  reia:
+    preferred: [食堂, 庭院]
+    avoid: []
+    social: true          # 喜欢跟人在一起
+
+  miria:
+    preferred: [食堂, 走廊]
+    avoid: []
+    roaming: true         # 喜欢到处转
+
+  margo:
+    preferred: [图书室, 牢房区]
+    avoid: []
+    stay_chance: 0.5      # 研究型
+
+  nanoka:
+    preferred: [食堂, 牢房区]
+    avoid: []
+    stay_chance: 0.5      # 存在感低，常待原地
+
+  arisa:
+    preferred: [庭院, 走廊]
+    avoid: [图书室]       # 不耐烦待在安静的地方
+    roaming: true
+
+  sherry:
+    preferred: [食堂, 庭院, 图书室]
+    avoid: []
+    roaming: true         # 喜欢到处跑
+
+  hannah:
+    preferred: [走廊, 牢房区]
+    avoid: [食堂]         # 不喜欢人多的地方
+    stay_chance: 0.4
+
+  coco:
+    preferred: [庭院, 走廊]
+    avoid: [食堂]
+    stay_chance: 0.3
+
+  meruru:
+    preferred: [图书室, 牢房区]
+    avoid: []
+    follow_crowd: false   # 不跟人群
+    stay_chance: 0.4
+
+# 所有可用地点
+all_locations:
+  - 食堂
+  - 牢房区
+  - 图书室
+  - 庭院
+  - 走廊

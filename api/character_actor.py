@@ -6,11 +6,14 @@
 # 2. 确保对话符合角色性格、口癖、说话方式
 # 3. 根据情绪目标和张力等级调整对话语气
 # 4. 生成玩家选项的预生成回应
+# 5. 【v10新增】空内容检测+重试、幻觉角色名修正、地点一致性验证
 # ============================================================================
 
 import anthropic
 import json
 import yaml
+import re
+import random
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
@@ -75,6 +78,62 @@ def load_yaml(filepath: str) -> dict:
 
 class CharacterActor:
     """角色演出层 - 根据Beat生成对话"""
+
+    # ============================================================================
+    # 【v10新增】角色名白名单 - 防止幻觉角色名
+    # ============================================================================
+    VALID_CHARACTERS = {
+        # ID: (中文名, 日文名, 别名列表)
+        "aima": ("艾玛", "エマ", ["桜羽艾玛", "艾玛酱"]),
+        "hiro": ("希罗", "ヒロ", ["寻", "二階堂希罗", "希罗酱"]),
+        "anan": ("安安", "アンアン", ["夏目安安", "安安酱"]),
+        "noah": ("诺亚", "ノア", ["城ヶ崎诺亚", "诺亚酱"]),
+        "reia": ("蕾雅", "レイア", ["蓮見蕾雅", "蕾雅酱"]),
+        "miria": ("米莉亚", "ミリア", ["佐伯米莉亚", "米莉亚酱"]),
+        "margo": ("玛尔戈", "マーゴ", ["玛格", "宝生玛尔戈", "玛尔戈酱"]),
+        "nanoka": ("菜乃香", "ナノカ", ["黒部菜乃香", "菜乃香酱"]),
+        "arisa": ("爱丽莎", "アリサ", ["紫藤爱丽莎", "爱丽莎酱"]),
+        "sherry": ("雪莉", "シェリー", ["橘雪莉", "雪莉酱"]),
+        "hannah": ("汉娜", "ハンナ", ["遠野汉娜", "汉娜酱"]),
+        "coco": ("可可", "ココ", ["沢渡可可", "可可酱"]),
+        "meruru": ("梅露露", "メルル", ["冰上梅露露", "梅露露酱"]),
+        "yuki": ("月代雪", "ユキ", ["典狱长"]),
+    }
+
+    # 所有有效名字的集合（用于快速查找）
+    VALID_NAMES = set()
+    for char_id, (cn, jp, aliases) in VALID_CHARACTERS.items():
+        VALID_NAMES.add(cn)
+        VALID_NAMES.add(jp)
+        VALID_NAMES.add(char_id)
+        VALID_NAMES.update(aliases)
+
+    # 常见幻觉角色名（日系名字模式）
+    HALLUCINATION_PATTERNS = [
+        "美咲", "亚美", "千夏", "真由", "沙织", "花子", "樱", "雪菜",
+        "彩香", "美月", "优子", "理沙", "惠", "麻衣", "由纪", "明日香",
+        "香织", "友美", "智子", "加奈", "美穗", "纯子", "裕子", "京子",
+    ]
+
+    # ============================================================================
+    # 【v10新增】地点关键词映射 - 防止地点描写不匹配
+    # ============================================================================
+    LOCATION_KEYWORDS = {
+        "食堂": ["食堂", "餐桌", "饭菜", "餐具", "厨房", "用餐", "餐盘", "筷子"],
+        "牢房区": ["牢房", "铁栏", "牢门", "囚室", "床铺", "狭小", "铁门", "牢笼"],
+        "图书室": ["图书室", "书架", "书本", "阅读", "书页", "书籍", "图书", "翻阅"],
+        "庭院": ["庭院", "阳光", "花草", "树木", "天空", "户外", "草地", "微风"],
+        "走廊": ["走廊", "长廊", "通道", "脚步声", "回响", "窗户", "过道"],
+    }
+
+    # 地点冲突词（出现这些词说明地点描写错了）
+    LOCATION_CONFLICTS = {
+        "食堂": ["书架", "书本", "牢房", "铁栏", "花草", "草地"],
+        "牢房区": ["餐桌", "饭菜", "书架", "阳光", "花草", "书本"],
+        "图书室": ["餐桌", "饭菜", "铁栏", "牢房", "花草", "草地"],
+        "庭院": ["书架", "餐桌", "铁栏", "牢房", "走廊里"],
+        "走廊": ["书架", "餐桌", "牢房里", "庭院里", "花草"],
+    }
 
     def __init__(self, project_root: Path = None):
         self.client = anthropic.Anthropic(api_key=get_api_key("character"))
@@ -448,6 +507,167 @@ class CharacterActor:
             "C": ChoiceResponse("C", [DialogueLine(char_id, "...什么？", "...何？", "nervous")], {"stress": 5})
         }
 
+    # ============================================================================
+    # 【v10新增】空内容检测与回退
+    # ============================================================================
+
+    def _check_empty_beats(self, outputs: List[DialogueOutput]) -> List[str]:
+        """检查哪些 Beat 内容为空"""
+        empty = []
+        for output in outputs:
+            # 检查对话列表是否为空或只有空字符串
+            has_content = any(
+                line.text_cn and line.text_cn.strip() and line.text_cn.strip() != "..."
+                for line in output.dialogue
+            )
+            if not has_content:
+                empty.append(output.beat_id)
+        return empty
+
+    def _fill_empty_beats_with_fallback(
+        self,
+        outputs: List[DialogueOutput],
+        empty_beats: List[str],
+        beats: List  # List[Beat]
+    ) -> List[DialogueOutput]:
+        """用回退内容填充空 Beat"""
+        for output in outputs:
+            if output.beat_id in empty_beats:
+                # 找到对应的 Beat 信息
+                beat_info = next(
+                    (b for b in beats if b.beat_id == output.beat_id),
+                    None
+                )
+                if beat_info:
+                    # 生成回退内容
+                    fallback_text = self._generate_fallback_narration(beat_info)
+                    output.dialogue = [
+                        DialogueLine(
+                            speaker="narrator",
+                            text_cn=fallback_text,
+                            text_jp=fallback_text,
+                            emotion="neutral"
+                        )
+                    ]
+        return outputs
+
+    def _generate_fallback_narration(self, beat) -> str:
+        """根据 Beat 信息生成回退叙述"""
+        templates = {
+            "opening": "你来到了这里。{description}",
+            "development": "{description} 气氛变得微妙起来。",
+            "tension": "空气中弥漫着一丝紧张。{description}",
+            "climax": "{description} 这一刻似乎格外漫长。",
+            "resolution": "时间静静流逝。{description}"
+        }
+        template = templates.get(beat.beat_type, "{description}")
+        desc = beat.description[:50] if len(beat.description) > 50 else beat.description
+        return template.format(description=desc)
+
+    # ============================================================================
+    # 【v10新增】幻觉角色名检测与修正
+    # ============================================================================
+
+    def _validate_character_names(self, text: str) -> Tuple[bool, List[str]]:
+        """检查文本中是否有无效角色名"""
+        invalid_names = []
+        for pattern in self.HALLUCINATION_PATTERNS:
+            if pattern in text:
+                invalid_names.append(pattern)
+        return len(invalid_names) == 0, invalid_names
+
+    def _fix_invalid_names(self, text: str, context_characters: List[str]) -> str:
+        """替换无效角色名为上下文中的有效角色"""
+        # 获取上下文角色的名字
+        valid_replacements = []
+        for char_id in context_characters:
+            if char_id in self.VALID_CHARACTERS:
+                cn_name = self.VALID_CHARACTERS[char_id][0]
+                valid_replacements.append(cn_name)
+
+        if not valid_replacements:
+            valid_replacements = ["某人", "那个人", "她"]
+
+        # 替换无效名字
+        result = text
+        for pattern in self.HALLUCINATION_PATTERNS:
+            if pattern in result:
+                replacement = random.choice(valid_replacements + ["她", "那个人"])
+                result = result.replace(pattern, replacement)
+
+        return result
+
+    def _validate_speaker(self, speaker: str) -> str:
+        """验证说话者ID是否有效"""
+        valid_speakers = ["narrator", "player", "warden"] + list(self.VALID_CHARACTERS.keys())
+        if speaker in valid_speakers:
+            return speaker
+        # 尝试匹配中文名
+        for char_id, (cn, jp, aliases) in self.VALID_CHARACTERS.items():
+            if speaker == cn or speaker == jp or speaker in aliases:
+                return char_id
+        # 无法识别，返回narrator
+        print(f"⚠️ 无效说话者: {speaker}，改为narrator")
+        return "narrator"
+
+    # ============================================================================
+    # 【v10新增】地点一致性检测与修正
+    # ============================================================================
+
+    def _validate_location_consistency(self, text: str, target_location: str) -> Tuple[bool, List[str]]:
+        """检查文本是否与目标地点一致"""
+        conflicts = self.LOCATION_CONFLICTS.get(target_location, [])
+        found_conflicts = []
+        for conflict_word in conflicts:
+            if conflict_word in text:
+                found_conflicts.append(conflict_word)
+        return len(found_conflicts) == 0, found_conflicts
+
+    def _fix_location_references(self, text: str, correct_location: str) -> str:
+        """替换错误的地点引用"""
+        # 地点替换映射
+        replacements = {
+            "图书馆": {"食堂": "食堂", "牢房区": "牢房", "庭院": "庭院", "走廊": "走廊"},
+            "图书室": {"食堂": "食堂", "牢房区": "牢房", "庭院": "庭院", "走廊": "走廊"},
+            "书架": {"食堂": "餐桌", "牢房区": "墙壁", "庭院": "长椅", "走廊": "窗户"},
+            "书本": {"食堂": "餐盘", "牢房区": "床铺", "庭院": "花草", "走廊": "窗户"},
+        }
+        result = text
+        for wrong_word, location_map in replacements.items():
+            if wrong_word in result and correct_location in location_map:
+                result = result.replace(wrong_word, location_map[correct_location])
+        return result
+
+    # ============================================================================
+    # 【v10新增】综合验证与修正
+    # ============================================================================
+
+    def _validate_and_fix_dialogue(
+        self,
+        outputs: List[DialogueOutput],
+        scene_characters: List[str],
+        location: str
+    ) -> List[DialogueOutput]:
+        """验证并修正对话内容"""
+        for output in outputs:
+            for line in output.dialogue:
+                # 1. 验证说话者
+                line.speaker = self._validate_speaker(line.speaker)
+
+                # 2. 检查幻觉角色名
+                is_valid, invalid_names = self._validate_character_names(line.text_cn)
+                if not is_valid:
+                    print(f"⚠️ 检测到幻觉角色名: {invalid_names}")
+                    line.text_cn = self._fix_invalid_names(line.text_cn, scene_characters)
+
+                # 3. 检查地点一致性
+                is_valid, conflicts = self._validate_location_consistency(line.text_cn, location)
+                if not is_valid:
+                    print(f"⚠️ 检测到地点冲突: {conflicts}（当前地点：{location}）")
+                    line.text_cn = self._fix_location_references(line.text_cn, location)
+
+        return outputs
+
     def generate_scene_dialogue(
         self,
         scene_plan: ScenePlan
@@ -484,29 +704,55 @@ class CharacterActor:
         # 构建整场景的 prompt
         prompt = self._build_scene_prompt(scene_plan, characters_info)
 
-        # 单次 API 调用生成对话
+        # 单次 API 调用生成对话（带重试）
         dialogue_outputs = []
-        try:
-            print(f"  [CharacterActor] 正在生成 {len(scene_plan.beats)} 个 Beat 的对话...")
-            response = self.client.messages.create(
-                model=MODEL,
-                max_tokens=4096,  # 增大 token 限制以容纳整场对话
-                messages=[{"role": "user", "content": prompt}]
-            )
+        max_retries = 2
+        scene_characters = list(all_characters)
 
-            raw_text = response.content[0].text
-            print(f"  [CharacterActor] 对话生成完成 (响应长度: {len(raw_text)} 字符)")
+        for attempt in range(max_retries + 1):
+            try:
+                print(f"  [CharacterActor] 正在生成 {len(scene_plan.beats)} 个 Beat 的对话...")
+                response = self.client.messages.create(
+                    model=MODEL,
+                    max_tokens=4096,  # 增大 token 限制以容纳整场对话
+                    messages=[{"role": "user", "content": prompt}]
+                )
 
-            # 解析整场对话
-            result = parse_json_with_diagnostics(raw_text, "场景对话", "CharacterActor")
-            dialogue_outputs = self._parse_scene_dialogue(result, scene_plan.beats)
+                raw_text = response.content[0].text
+                print(f"  [CharacterActor] 对话生成完成 (响应长度: {len(raw_text)} 字符)")
 
-        except json.JSONDecodeError as e:
-            print(f"[CharacterActor] JSON 解析失败，使用回退对话")
-            dialogue_outputs = self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
-        except Exception as e:
-            print(f"[CharacterActor] API 调用失败: {type(e).__name__}: {e}")
-            dialogue_outputs = self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
+                # 解析整场对话
+                result = parse_json_with_diagnostics(raw_text, "场景对话", "CharacterActor")
+                dialogue_outputs = self._parse_scene_dialogue(result, scene_plan.beats)
+
+                # 【v10新增】验证空内容
+                empty_beats = self._check_empty_beats(dialogue_outputs)
+                if empty_beats:
+                    if attempt < max_retries:
+                        print(f"⚠️ 检测到 {len(empty_beats)} 个空 Beat，重试中... ({attempt+1}/{max_retries})")
+                        continue  # 重试
+                    else:
+                        print(f"⚠️ 重试后仍有空 Beat，使用回退内容填充")
+                        dialogue_outputs = self._fill_empty_beats_with_fallback(
+                            dialogue_outputs, empty_beats, scene_plan.beats
+                        )
+
+                # 【v10新增】验证并修正对话内容
+                dialogue_outputs = self._validate_and_fix_dialogue(
+                    dialogue_outputs,
+                    scene_characters,
+                    scene_plan.location
+                )
+                break  # 成功，跳出重试循环
+
+            except json.JSONDecodeError as e:
+                print(f"[CharacterActor] JSON 解析失败，使用回退对话")
+                dialogue_outputs = self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
+                break
+            except Exception as e:
+                print(f"[CharacterActor] API 调用失败: {type(e).__name__}: {e}")
+                dialogue_outputs = self._create_fallback_scene_dialogue(scene_plan.beats, characters_info)
+                break
 
         # ★ 新增：如果有选择点，同时生成预选回应
         choice_responses = None
@@ -595,14 +841,30 @@ Beat {i} ({beat.beat_id}): {beat.beat_type}
   ]
 }"""
 
+        # 【v10新增】获取地点关键词
+        location = scene_plan.location
+        location_keywords = self.LOCATION_KEYWORDS.get(location, [])
+        location_conflicts = self.LOCATION_CONFLICTS.get(location, [])
+
         prompt = f"""你是一位专业的视觉小说对话编剧。根据导演的场景规划，一次性生成整个场景的所有对话。
+
+【重要：角色名白名单】
+本游戏只有13名角色：艾玛、希罗、安安、诺亚、蕾雅、米莉亚、玛尔戈、菜乃香、爱丽莎、雪莉、汉娜、可可、梅露露
+❌ 禁止使用：美咲、亚美、千夏、真由、沙织、花子等任何其他名字
+✅ 泛指他人时用：「她」「那个人」「某人」「其他人」
+
+【重要：地点一致性】
+当前地点是「{location}」，所有描写必须与此地点相关。
+✅ 应该出现的元素：{', '.join(location_keywords)}
+❌ 不应该出现：{', '.join(location_conflicts)}
+例如：如果在「走廊」，不要写"图书馆深处"或"书架旁边"
 
 【游戏背景】
 《魔法少女的魔女审判》- 13名少女被关在孤岛监牢的推理解谜游戏。
 
 【场景信息】
 场景名: {scene_plan.scene_name}
-地点: {scene_plan.location}
+地点: {location}（必须一致！）
 整体弧线: {scene_plan.overall_arc}
 Beat数量: {len(scene_plan.beats)}
 
@@ -631,6 +893,7 @@ Beat数量: {len(scene_plan.beats)}
 2. 对话要连贯，前后 Beat 要有呼应
 3. 张力等级：1-3平静 / 4-5略紧张 / 6-7紧张 / 8-10激动
 4. 中日文内容要对应，但表达方式可以各自自然
+5. 【重要】每个Beat必须有实质内容，不能只有"..."
 
 【输出格式】严格 JSON：
 {output_format}
