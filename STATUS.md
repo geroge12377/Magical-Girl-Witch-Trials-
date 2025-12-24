@@ -1,12 +1,128 @@
 # 项目状态追踪
 
-> 最后更新：2025-12-22
+> 最后更新：2025-12-24
 
 ---
 
 ## 更新日志
 
-### 2025-12-22 - API 认证错误修复 v7 ⭐ 最新
+### 2025-12-24 - 世界观库 & 事件树重构 v9 ⭐ 最新
+
+**修改文件**:
+- 新增 `worlds/witch_trial/` 世界观库目录
+- 新增 `api/world_loader.py`, `api/event_tree_engine.py`, `api/scene_validator.py`
+- 修改 `api/director_planner.py`, `api/__init__.py`
+- 修改 `game_loop_v3.py`
+- 新增 `world_state/scene_history.json`
+
+**核心功能**:
+
+1. **世界观库 (worlds/witch_trial/)**:
+   - `manifest.yaml`: 7天起承转合结构定义
+   - `core/rules.yaml`: 魔女因子系统、杀人机制、审判机制
+   - `core/tone.yaml`: 场景氛围指导、张力范围、对话密度
+
+2. **事件树系统 (event_tree/)**:
+   - `structure.yaml`: 7天故事结构
+   - `scene_types.yaml`: 场景维度定义（参与人数×活动×氛围×玩家角色×信息价值）
+   - `triggers.yaml`: 触发条件库
+   - `branches/character_arcs.yaml`: 角色弧线（汉娜崩溃线、希罗救赎线等）
+   - `branches/endings.yaml`: 4种结局分支（Bad/Normal/Good/True End）
+
+3. **WorldLoader (api/world_loader.py)**:
+   - 按需加载世界观YAML数据
+   - `get_arc_for_day(day)`: 根据天数返回arc阶段（起/承/转/合）
+   - `load_tone_for_arc(arc)`: 获取当前阶段的氛围指导
+
+4. **EventTreeEngine (api/event_tree_engine.py)**:
+   - `get_day_plan(day)`: 获取当天事件计划
+   - `check_triggers(context)`: 检查触发条件
+   - `check_character_arcs(context)`: 检查角色弧线进度
+   - `get_ending_path(context)`: 检查结局条件
+   - `get_anti_repetition_warnings()`: 防止场景/角色重复
+
+5. **SceneValidator (api/scene_validator.py)**:
+   - `validate(scene_plan, day)`: 验证场景是否符合当天约束
+   - `auto_fix(scene_plan, day)`: 自动修正违规内容（张力、情绪）
+   - `check_scene_storytelling()`: 验收测试用
+
+6. **DirectorPlanner 增强**:
+   - 动态构建约束（张力范围、禁止内容、允许内容）
+   - 构建故事上下文（arc阶段、已发生事件）
+   - 检查重复风险
+   - 验证并修正场景
+   - 记录场景到历史
+
+7. **场景故事性要求**:
+   - 每个场景必须是完整小故事（开场→铺垫→发展→转折→收尾）
+   - 最小长度：静默观察150字、日常片段350字、互动场景500字
+   - 对话要求：每2-3句穿插动作/神态描写
+
+**目录结构**:
+```
+test_project/
+├── worlds/                          # 世界观库根目录
+│   └── witch_trial/                 # 魔女审判世界观
+│       ├── manifest.yaml            # 元信息（天数、节奏、主题）
+│       ├── core/                    # 核心设定
+│       │   ├── rules.yaml           # 世界规则
+│       │   └── tone.yaml            # 氛围基调
+│       └── event_tree/              # 事件树
+│           ├── structure.yaml       # 7天结构
+│           ├── scene_types.yaml     # 场景类型
+│           ├── triggers.yaml        # 触发条件
+│           └── branches/            # 分支事件
+│               ├── character_arcs.yaml
+│               └── endings.yaml
+│
+├── world_state/
+│   └── scene_history.json           # 场景历史（防重复）
+│
+├── api/
+│   ├── world_loader.py              # 世界观加载器
+│   ├── event_tree_engine.py         # 事件树引擎
+│   └── scene_validator.py           # 场景验证器
+```
+
+**验收标准**:
+- ✅ Day 1-2（起阶段）张力范围 1-4，禁止崩溃/魔女化
+- ✅ Day 3-4（承阶段）张力范围 2-6，允许小冲突
+- ✅ Day 5-6（转阶段）张力范围 4-9，允许魔女化
+- ✅ Day 7（合阶段）张力范围 3-10，结局判定
+- ✅ 同一地点间隔至少2个场景才能再次出现
+- ✅ 同一角色为焦点间隔至少3个场景
+- ✅ 场景历史正确记录并用于防重复
+
+---
+
+### 2025-12-22 - 多 API Key 支持 v8
+
+**修改文件**: `config.py`, `config_local.py.example`
+
+**新增功能**: 支持从 config_local.py 读取多个 API Key，分散 rate limit
+
+**配置方式**:
+- 单 Key: 只设置 `ANTHROPIC_API_KEY`（向后兼容）
+- 多 Key: 分别设置 `ANTHROPIC_API_KEY_CHARACTER/DIRECTOR/CONTROLLER`
+
+**优先级**: 环境变量 > config_local.py > 通用 Key
+
+**Key 使用对应**:
+| 配置项 | 使用模块 | 说明 |
+|--------|----------|------|
+| `ANTHROPIC_API_KEY_CHARACTER` | `api/character_actor.py` | 角色演出层，生成对话 |
+| `ANTHROPIC_API_KEY_DIRECTOR` | `api/director_planner.py` | 导演规划层，生成场景规划 |
+| `ANTHROPIC_API_KEY_CONTROLLER` | 中控 API | NPC 位置更新 |
+
+**验收标准**:
+- ✅ 单个 Key 配置仍然有效（向后兼容）
+- ✅ 多个 Key 配置生效，各服务使用对应 Key
+- ✅ 优先级正确：专用 Key > 通用 Key
+- ✅ 无 Key 时显示清晰错误信息
+
+---
+
+### 2025-12-22 - API 认证错误修复 v7
 
 **修改文件**: `config.py`, `.gitignore`, `config_local.py.example`
 
@@ -380,13 +496,30 @@ night: day1_night → (next_day)
 | 模块 | 文件 | 状态 | 说明 |
 |------|------|:----:|------|
 | 故事规划层 | `api/story_planner.py` | ✅ | 三天大纲 + 结局判定 |
-| 导演规划层 | `api/director_planner.py` | ✅ | 生成ScenePlan，包含多个Beat |
+| 导演规划层 | `api/director_planner.py` | ✅ | 生成ScenePlan，含v9约束注入 |
 | 角色演出层 | `api/character_actor.py` | ✅ | 根据Beat生成对话（双语输出） |
 | 固定事件管理 | `api/fixed_event_manager.py` | ✅ | 固定事件触发系统 |
-| API模块导出 | `api/__init__.py` | ✅ | 导出核心类 |
-| v3游戏循环 | `game_loop_v3.py` | ✅ | 三层架构主循环 + 固定事件 |
+| 世界观加载器 | `api/world_loader.py` | ✅ | 【v9新增】加载worlds/配置 |
+| 事件树引擎 | `api/event_tree_engine.py` | ✅ | 【v9新增】触发条件+角色弧线 |
+| 场景验证器 | `api/scene_validator.py` | ✅ | 【v9新增】验证+自动修正 |
+| API模块导出 | `api/__init__.py` | ✅ | 导出核心类（含v9） |
+| v3游戏循环 | `game_loop_v3.py` | ✅ | 三层架构主循环 + v9集成 |
 | 规划层Prompt | `prompts/director_planner_prompt.txt` | ✅ | 规划层prompt模板 |
 | 演出层Prompt | `prompts/character_actor_prompt.txt` | ✅ | 演出层prompt模板（双语） |
+
+### 世界观库 (v9新增)
+
+| 文件 | 状态 | 说明 |
+|------|:----:|------|
+| `worlds/witch_trial/manifest.yaml` | ✅ | 世界观元信息、起承转合定义 |
+| `worlds/witch_trial/core/rules.yaml` | ✅ | 魔女因子系统、杀人机制 |
+| `worlds/witch_trial/core/tone.yaml` | ✅ | 场景氛围指导、张力范围 |
+| `worlds/witch_trial/event_tree/structure.yaml` | ✅ | 7天故事结构 |
+| `worlds/witch_trial/event_tree/scene_types.yaml` | ✅ | 场景维度定义 |
+| `worlds/witch_trial/event_tree/triggers.yaml` | ✅ | 触发条件库 |
+| `worlds/witch_trial/event_tree/branches/character_arcs.yaml` | ✅ | 角色弧线 |
+| `worlds/witch_trial/event_tree/branches/endings.yaml` | ✅ | 结局分支 |
+| `world_state/scene_history.json` | ✅ | 场景历史（防重复） |
 
 ### 现有模块
 

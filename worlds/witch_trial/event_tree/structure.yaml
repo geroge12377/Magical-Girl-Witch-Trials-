@@ -1,0 +1,166 @@
+# worlds/witch_trial/event_tree/structure.yaml
+
+# ═══════════════════════════════════════════
+# 7天故事结构
+# ═══════════════════════════════════════════
+
+days:
+  day_1:
+    arc: 起
+    theme: "陌生的监牢"
+    tension_template: peaceful_day
+
+    fixed_events:
+      - id: awakening
+        period: dawn
+        type: auto
+
+      - id: morning_assembly
+        period: morning
+        type: chain  # 接 awakening
+
+      - id: rules_announcement
+        type: chain
+
+      - id: first_free_time
+        type: chain
+        triggers: [npc_scatter]
+
+    possible_scenes:
+      count: 3-4
+      types: [observation, daily, simple_interaction]
+      focus: "认识环境和角色"
+
+    day_end:
+      - id: first_night
+        period: night
+        content: "各自回房，第一夜的不安"
+
+  day_2:
+    arc: 起
+    theme: "逐渐熟悉"
+    tension_template: peaceful_day
+
+    possible_scenes:
+      count: 4-5
+      types: [observation, daily, interaction]
+      focus: "建立日常，发现角色习惯"
+
+    hints_allowed:
+      - "某角色独处时表情不同"
+      - "两人之间的微妙气氛"
+
+  day_3:
+    arc: 承
+    theme: "日常的裂痕"
+    tension_template: building_day
+
+    possible_scenes:
+      count: 4-5
+      types: [daily, interaction, minor_conflict]
+
+    events_unlocked:
+      - small_conflict
+      - secret_glimpse
+      - relationship_shift
+
+  day_4:
+    arc: 承
+    theme: "暗流涌动"
+    tension_template: building_day
+
+    possible_scenes:
+      count: 4-6
+      types: [interaction, tension, observation]
+
+    murder_prep_check: true  # 检查是否有人接近魔女化
+
+  day_5:
+    arc: 转
+    theme: "临界点"
+    tension_template: climax_day
+
+    possible_scenes:
+      count: 5-6
+      types: [tension, confrontation, revelation]
+
+    events_unlocked:
+      - witch_signs
+      - breakdown
+      - murder_attempt  # 如果条件满足
+
+  day_6:
+    arc: 转
+    theme: "破局"
+    tension_template: climax_day
+
+    branch_point: true  # 根据之前选择分支
+
+    paths:
+      murder_occurred:
+        content: "调查阶段"
+        scenes: [investigation, interrogation, evidence]
+
+      murder_prevented:
+        content: "危机解除？"
+        scenes: [aftermath, relief, hidden_danger]
+
+      no_murder_risk:
+        content: "平静继续"
+        scenes: [daily, interaction, preparation]
+
+  day_7:
+    arc: 合
+    theme: "审判与结局"
+    tension_template: aftermath_day
+
+    paths:
+      trial_path:
+        trigger: "murder_occurred"
+        content: "魔女审判"
+        leads_to: [bad_end, normal_end]
+
+      peaceful_path:
+        trigger: "no_murder"
+        content: "最后的日常"
+        leads_to: [good_end, true_end]
+
+      hidden_path:
+        trigger: "all_secrets_found"
+        content: "真相揭露"
+        leads_to: [true_end]
+
+# ═══════════════════════════════════════════
+# 时段定义
+# ═══════════════════════════════════════════
+
+periods:
+  - id: dawn
+    name: "黎明"
+    time_range: "05:00-07:00"
+    typical_scenes: ["起床", "独处", "早起者偶遇"]
+
+  - id: morning
+    name: "上午"
+    time_range: "07:00-12:00"
+    typical_scenes: ["早餐", "集会", "自由活动"]
+
+  - id: noon
+    name: "正午"
+    time_range: "12:00-14:00"
+    typical_scenes: ["午餐", "午休", "闲聊"]
+
+  - id: afternoon
+    name: "下午"
+    time_range: "14:00-18:00"
+    typical_scenes: ["自由活动", "小团体", "独处"]
+
+  - id: evening
+    name: "傍晚"
+    time_range: "18:00-21:00"
+    typical_scenes: ["晚餐", "夕阳场景", "密谈"]
+
+  - id: night
+    name: "夜晚"
+    time_range: "21:00-05:00"
+    typical_scenes: ["回房", "夜谈", "独白", "暗中行动"]

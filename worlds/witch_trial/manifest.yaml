@@ -1,0 +1,52 @@
+# worlds/witch_trial/manifest.yaml
+
+id: witch_trial
+name: 魔法少女的魔女审判
+version: "1.0"
+
+# 结构参数
+structure:
+  total_days: 7              # 总天数
+  periods_per_day: 6         # dawn/morning/noon/afternoon/evening/night
+  scenes_per_day: 4-6        # 每天场景数范围
+
+# 起承转合节奏
+arc:
+  起:
+    days: [1, 2]
+    theme: "日常确立"
+    tension_range: [1, 4]
+    event_density: sparse    # 事件稀疏
+    silence_ratio: 0.5       # 50%静默/观察场景
+    forbidden: ["魔女化", "杀人", "崩溃"]
+
+  承:
+    days: [3, 4]
+    theme: "生活展开"
+    tension_range: [2, 6]
+    event_density: normal
+    silence_ratio: 0.35
+    allowed: ["小冲突", "秘密暗示", "关系变化"]
+
+  转:
+    days: [5, 6]
+    theme: "暗流与破局"
+    tension_range: [4, 9]
+    event_density: dense
+    silence_ratio: 0.2
+    allowed: ["魔女化", "事件", "崩溃", "杀人"]
+
+  合:
+    days: [7]
+    theme: "收束"
+    tension_range: [3, 10]
+    event_density: focused
+    silence_ratio: 0.1
+    content: ["审判", "结局", "真相"]
+
+# 设计原则（AI生成时参考）
+principles:
+  - 生活感：不是任务，是生活
+  - 观察者视角：玩家看别人的日常
+  - 选项无压力：大部分选什么都可以
+  - 沉默也是内容：留白比填满重要

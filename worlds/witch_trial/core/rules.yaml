@@ -1,0 +1,113 @@
+# worlds/witch_trial/core/rules.yaml
+
+# ═══════════════════════════════════════════
+# 魔女因子系统
+# ═══════════════════════════════════════════
+
+witch_factor:
+  description: |
+    感染魔女因子的少女会获得魔法，成为「预备魔女」。
+    负面情感和心理创伤会滋养因子，加深「魔女化」。
+    魔女化到极限会变成「残骸」，失去理智。
+
+  stages:
+    normal:
+      madness_range: [0, 30]
+      description: "日常状态，魔法稳定"
+      behavior: "正常社交，偶尔情绪波动"
+
+    unstable:
+      madness_range: [31, 60]
+      description: "情绪波动，魔法不稳"
+      behavior: "易怒/易哭，魔法偶尔失控"
+      signs: ["独处时自言自语", "对特定话题反应过激"]
+
+    critical:
+      madness_range: [61, 80]
+      description: "临界状态，杀意萌芽"
+      behavior: "回避社交，盯着某人看，梦话"
+      signs: ["深夜徘徊", "收集「工具」", "写奇怪的东西"]
+
+    witch:
+      madness_range: [81, 100]
+      description: "魔女化，随时可能杀人"
+      behavior: "失控边缘，需要极小的触发"
+      trigger_threshold: 0.7  # 70%概率在合适条件下行动
+
+# ═══════════════════════════════════════════
+# 魔女化触发条件
+# ═══════════════════════════════════════════
+
+witch_triggers:
+  base_requirements:
+    - "madness >= 80"
+    - "has_target == true"      # 有杀意对象
+    - "opportunity == true"     # 有机会（独处/夜晚）
+
+  probability_modifiers:
+    trauma_activated: +0.20     # 创伤被触发
+    target_present: +0.15       # 目标在场
+    isolated_2_days: +0.15      # 连续2天独处
+    night_time: +0.10           # 夜晚
+    conflict_recent: +0.10      # 最近发生冲突
+    witnessed_violence: +0.05   # 目睹暴力
+
+  prevention_factors:
+    has_supporter: -0.20        # 有支持者/朋友
+    stress_released: -0.15      # 压力得到释放
+    player_intervened: -0.25    # 玩家成功介入
+
+# ═══════════════════════════════════════════
+# 杀人机制
+# ═══════════════════════════════════════════
+
+murder:
+  core_principle: |
+    杀人不是玩家「选错」导致，而是魔女化累积到临界点。
+    玩家只能「看到」「来不及阻止」或「事后发现」。
+
+  requirements:
+    killer:
+      - "madness >= 80"
+      - "has_motive == true"    # 有动机
+      - "魔女化阶段 == witch"
+    opportunity:
+      - "target_alone OR night_time"
+      - "no_witness OR can_silence_witness"
+
+  execution_window:
+    preferred: ["night", "dawn"]
+    possible: ["any_isolated_moment"]
+
+  aftermath:
+    discovery_delay: "0-12 hours"
+    evidence_types: ["physical", "magical", "testimony", "alibi_hole"]
+
+# ═══════════════════════════════════════════
+# 审判机制
+# ═══════════════════════════════════════════
+
+trial:
+  trigger: "尸体被发现 + 调查完成"
+  duration: "1小时（游戏内）"
+
+  phases:
+    - name: "证据陈述"
+      description: "展示收集到的证据"
+    - name: "质询"
+      description: "玩家可以质问嫌疑人"
+    - name: "辩论"
+      description: "角色之间争论"
+    - name: "投票"
+      description: "13人投票决定处刑对象"
+
+  outcomes:
+    correct_vote:
+      result: "真凶被处刑"
+      ending_path: "normal_end 或 good_end"
+    wrong_vote:
+      result: "无辜者被处刑"
+      ending_path: "bad_end"
+    no_consensus:
+      result: "无人被处刑，凶手逍遥"
+      ending_path: "继续游戏，可能二次杀人"

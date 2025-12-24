@@ -1,8 +1,9 @@
 # ============================================================================
-# 游戏主循环 v3 - 三层导演架构 + 完整三天流程
+# 游戏主循环 v3 - 三层导演架构 + 完整三天流程 + 世界观库v9
 # ============================================================================
-# 架构：故事规划层 + 导演规划层 + 角色演出层
+# 架构：故事规划层 + 导演规划层 + 角色演出层 + 世界观库
 # 流程：大纲生成 → 时段循环 → 导演规划 → 角色演出 → 结局判定
+# 【v9新增】世界观约束、事件树引擎、场景验证
 # ============================================================================
 
 import json
@@ -16,6 +17,9 @@ from api import DirectorPlanner, CharacterActor, ScenePlan, Beat, DialogueOutput
 from api import StoryPlanner, EndingType
 from api.fixed_event_manager import FixedEventManager
 from config import get_api_key, MODEL, OUTPUT_DIR
+
+# 【v9新增】世界观库模块
+from api import WorldLoader, get_world_loader, EventTreeEngine
 
 
 # ============================================================================
@@ -232,7 +236,7 @@ def display_ending(ending_type: str, ending_info: Dict):
 # ============================================================================
 
 class GameLoopV3:
-    """游戏主循环 v3 - 三层架构（故事规划 + 导演规划 + 角色演出）"""
+    """游戏主循环 v3 - 三层架构（故事规划 + 导演规划 + 角色演出 + 世界观库）"""
 
     def __init__(self):
         self.project_root = Path(__file__).parent
@@ -242,11 +246,45 @@ class GameLoopV3:
         self.fixed_event_manager = FixedEventManager(self.project_root)  # 固定事件管理器
         self.locations = load_yaml(self.project_root / "world_state" / "locations.yaml")
 
+        # 【v9新增】世界观库
+        self.world_loader = get_world_loader(project_root=self.project_root)
+        self.event_engine = EventTreeEngine(self.world_loader, self.project_root)
+
         self.player_location = "牢房区"
         self.running = True
         self.current_scene_plan: Optional[ScenePlan] = None
         self.pregenerated_responses: Dict = {}
         self.show_jp_text = False  # 是否显示日文（调试用）
+
+    def _display_arc_info(self, day: int):
+        """【v9新增】显示当前arc阶段信息"""
+        arc = self.world_loader.get_arc_for_day(day)
+        day_plan = self.event_engine.get_day_plan(day)
+
+        print(f"\n{'='*50}")
+        print(f"  第 {day} 天 - {arc}阶段")
+        print(f"  「{day_plan.theme}」")
+        if arc == "转":
+            print(f"  （气氛似乎有些不一样了...）")
+        elif arc == "合":
+            print(f"  （一切都将在今天结束...）")
+        print(f"{'='*50}\n")
+
+    def _check_arc_updates(self):
+        """【v9新增】检查角色弧线更新"""
+        context = self.event_engine.load_game_context()
+        arc_updates = self.event_engine.check_character_arcs(context)
+
+        for update in arc_updates:
+            if update.player_can_notice:
+                # 显示微妙提示（不直接说）
+                print(f"\n（你注意到{update.character}似乎有些不同...）\n")
+
+    def _check_ending_condition(self) -> Optional[str]:
+        """【v9新增】检查结局条件"""
+        context = self.event_engine.load_game_context()
+        ending = self.event_engine.get_ending_path(context)
+        return ending
 
     def reset_game_state(self):
         """重置游戏状态（每次Demo启动时自动调用）"""
@@ -309,7 +347,18 @@ class GameLoopV3:
             state["magic_revealed"] = False
 
         save_json(character_states_path, character_states)
-        print("[系统] 游戏状态已重置完成")
+
+        # 【v9新增】重置 scene_history.json
+        scene_history_path = self.project_root / "world_state" / "scene_history.json"
+        initial_scene_history = {
+            "scenes": [],
+            "location_last_used": {},
+            "character_last_focus": {},
+            "activity_last_used": {}
+        }
+        save_json(scene_history_path, initial_scene_history)
+
+        print("[系统] 游戏状态已重置完成（含世界观库v9）")
 
     def run(self):
         """运行游戏"""
@@ -322,6 +371,12 @@ class GameLoopV3:
         print("\n[系统] 正在生成三天大纲...")
         self.story_planner.generate_three_day_outline()
         print("[系统] 大纲生成完成!")
+
+        # 【v9新增】显示第一天arc信息
+        current_day_data = load_json(self.project_root / "world_state" / "current_day.json")
+        self._display_arc_info(current_day_data.get("day", 1))
+
+        self._last_displayed_day = current_day_data.get("day", 1)  # 记录上次显示的日期
 
         while self.running:
             try:
@@ -348,7 +403,22 @@ class GameLoopV3:
 
         # 0. 加载当前状态
         current_day_data = load_json(self.project_root / "world_state" / "current_day.json")
-        print(f"[DEBUG] game_turn() 开始: day={current_day_data.get('day')}, period={current_day_data.get('period')}, event_count={current_day_data.get('event_count')}")
+        current_day = current_day_data.get('day', 1)
+        print(f"[DEBUG] game_turn() 开始: day={current_day}, period={current_day_data.get('period')}, event_count={current_day_data.get('event_count')}")
+
+        # 【v9新增】如果日期变化，显示新的arc信息
+        if hasattr(self, '_last_displayed_day') and current_day != self._last_displayed_day:
+            self._display_arc_info(current_day)
+            self._last_displayed_day = current_day
+
+        # 【v9新增】检查结局条件
+        ending = self._check_ending_condition()
+        if ending:
+            print(f"\n[系统] 达成结局条件: {ending}")
+            # TODO: 显示结局场景
+
+        # 【v9新增】检查角色弧线更新
+        self._check_arc_updates()
 
         # 检查是否已结束
         if current_day_data.get("phase") == "ending":

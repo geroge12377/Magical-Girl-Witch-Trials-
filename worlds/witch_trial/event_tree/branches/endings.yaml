@@ -1,0 +1,199 @@
+# worlds/witch_trial/event_tree/branches/endings.yaml
+
+# ═══════════════════════════════════════════
+# 结局条件与分支
+# ═══════════════════════════════════════════
+
+endings:
+  bad_end_wrong_vote:
+    type: bad_end
+    name: "错误的审判"
+
+    trigger:
+      - "flag.murder_occurred"
+      - "flag.trial_completed"
+      - "trial_result == wrong_person"
+
+    description: "投票处死了无辜者，真凶逍遥法外"
+
+    aftermath:
+      - "无辜者死亡"
+      - "真凶可能继续杀人"
+      - "周目结束"
+
+    scene_description: |
+      审判结束。
+      她的眼中没有恨意，只有疲惫。
+      「...我知道你们会这样选。」
+      处刑室的门在身后关上。
+      你隐约觉得，有什么不对。
+
+    unlocks:
+      - "角色档案（部分）"
+
+  bad_end_player_witch:
+    type: bad_end
+    name: "玩家魔女化"
+
+    trigger:
+      - "player.madness >= 100"
+
+    description: "玩家自己失控，成为魔女"
+
+    scene_description: |
+      最后看到的是自己的手。
+      不知道从什么时候开始，指尖开始发黑。
+      耳边有谁在尖叫。是她们在叫吗？
+      还是......自己？
+
+  # ───────────────────────────────────────
+
+  normal_end:
+    type: normal_end
+    name: "正义的审判"
+
+    trigger:
+      - "flag.murder_occurred"
+      - "flag.trial_completed"
+      - "trial_result == correct_person"
+
+    description: "找出真凶，但有人死亡"
+
+    aftermath:
+      - "真凶被处刑"
+      - "周目结束"
+      - "解锁第二周目"
+
+    scene_description: |
+      审判结束了。
+      真相被揭露，凶手低下了头。
+      但失去的生命，再也回不来了。
+      「...下次，一定要更早发现。」
+      你这样告诉自己。
+
+    unlocks:
+      - "角色档案完整版"
+      - "第二周目可用"
+      - "压力/madness可视化"
+
+  # ───────────────────────────────────────
+
+  good_end:
+    type: good_end
+    name: "无人死亡"
+
+    trigger:
+      - "day == 7"
+      - "NOT flag.murder_occurred"
+      - "alive_count == 13"
+
+    description: "成功阻止悲剧，全员存活"
+
+    how_to_achieve:
+      - "识别高危角色"
+      - "在关键时刻介入"
+      - "帮助角色释放压力"
+
+    scene_description: |
+      第七天的黄昏。
+      没有人死去。
+      大魔女没有出现，审判也没有发生。
+      只是普通的......一周。
+      她们还在笑着。这样就够了。
+
+    unlocks:
+      - "隐藏剧情提示"
+      - "角色好感度可视化"
+      - "选项影响提示"
+      - "更多互动选项解锁"
+
+  # ───────────────────────────────────────
+
+  true_end:
+    type: true_end
+    name: "真相"
+
+    trigger:
+      - "good_end条件满足"
+      - "flag.library_secret_found"
+      - "flag.yuki_truth_known"
+      - "avg(all_characters.affection) >= 70"
+
+    description: "揭露监牢的真相，13人联合觉醒"
+
+    how_to_achieve:
+      - "需要多周目收集信息"
+      - "发现图书馆隐藏房间"
+      - "了解大魔女月代雪的计划"
+      - "全员高好感"
+
+    scene_description: |
+      当最后一块拼图落下，你终于明白了一切。
+      这座监牢，这场审判，这七天的意义。
+      月代雪站在你们面前，微笑着。
+      「终于......有人找到了答案。」
+      十三人的手握在一起。
+      魔女因子开始发光。
+      不是诅咒。是祝福。
+      故事，从这里真正开始。
+
+    unlocks:
+      - "完整角色心声"
+      - "隐藏场景"
+      - "最终真相"
+      - "制作人员名单"
+
+# ═══════════════════════════════════════════
+# 周目继承
+# ═══════════════════════════════════════════
+
+playthrough_inheritance:
+  always_keep:
+    - "已解锁的角色档案"
+    - "已发现的秘密标记"
+    - "已达成的结局记录"
+    - "总游玩时间"
+
+  reset:
+    - "所有角色状态"
+    - "时间"
+    - "事件进度"
+    - "关系值"
+    - "flags"
+
+  unlock_by_ending:
+    normal_end:
+      - "压力/madness可视化"
+      - "部分角色隐藏信息"
+      - "「第二周目」标题画面"
+
+    good_end:
+      - "好感度可视化"
+      - "选项影响提示"
+      - "更多互动选项解锁"
+      - "「希望之路」成就"
+
+    true_end:
+      - "完整角色心声"
+      - "隐藏场景解锁"
+      - "最终真相"
+      - "「觉醒」成就"
+      - "制作人员名单"
+
+# ═══════════════════════════════════════════
+# 结局判定优先级
+# ═══════════════════════════════════════════
+
+ending_priority:
+  # 按优先级从高到低检查
+  order:
+    - bad_end_player_witch    # 最高优先级：玩家魔女化
+    - bad_end_wrong_vote      # 审判错误
+    - normal_end              # 审判正确
+    - true_end                # 真结局（需要额外条件）
+    - good_end                # 无人死亡
+
+  notes:
+    - "true_end需要在good_end基础上额外满足条件"
+    - "如果有杀人发生，只能是bad_end或normal_end"
+    - "bad_end_player_witch随时可能触发"

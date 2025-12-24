@@ -1,0 +1,212 @@
+# worlds/witch_trial/event_tree/branches/character_arcs.yaml
+
+# ═══════════════════════════════════════════
+# 角色弧线模板（不是写死剧本，是可能性）
+# ═══════════════════════════════════════════
+
+# 每个角色有潜在的「弧线」，AI根据条件选择是否触发
+
+arcs:
+  hannah_collapse:
+    character: hannah
+    description: "汉娜的身份崩溃线"
+
+    prerequisites:
+      - "interactions.hannah >= 3"  # 至少互动3次
+      - "day >= 3"
+
+    trigger_conditions:
+      - "有人提到贵族/身份话题"
+      - "汉娜被孤立超过1天"
+      - "有人质疑她的行为"
+
+    stages:
+      - stage: hint
+        day_range: [2, 3]
+        description: "汉娜对某些话题反应过激"
+        player_can_notice: true
+
+      - stage: crack
+        day_range: [3, 4]
+        description: "伪装出现裂痕，私下哭泣"
+        trigger: "hannah.stress >= 60"
+
+      - stage: breakdown
+        day_range: [4, 6]
+        description: "崩溃，真相暴露"
+        trigger: "hannah.stress >= 80 AND flag.hannah_confronted"
+
+      - stage: aftermath
+        description: "崩溃后的状态"
+        branches:
+          supported: "有人安慰 → 关系加深，压力下降"
+          abandoned: "被孤立 → madness上升"
+
+    outcomes:
+      if_supported:
+        - "hannah.affection += 30"
+        - "flag.hannah_ally = true"
+      if_abandoned:
+        - "hannah.madness += 20"
+        - "potential_victim = true"
+
+  # ───────────────────────────────────────
+
+  hiro_redemption:
+    character: hiro
+    description: "希罗的救赎线"
+
+    prerequisites:
+      - "interactions.hiro >= 4"
+      - "flag.hiro_past_revealed"
+
+    trigger_conditions:
+      - "玩家选择相信希罗"
+      - "希罗有机会证明自己"
+
+    stages:
+      - stage: distrust
+        day_range: [1, 3]
+        description: "对玩家冷淡，戒备"
+
+      - stage: test
+        day_range: [3, 5]
+        description: "试探玩家是否值得信任"
+        player_choice: true
+
+      - stage: reveal
+        day_range: [4, 6]
+        description: "透露过去的事情"
+        trigger: "hiro.trust >= 50"
+
+      - stage: ally
+        day_range: [5, 7]
+        description: "成为可靠同伴"
+        trigger: "flag.hiro_trusted"
+
+    outcomes:
+      if_allied:
+        - "flag.hiro_ally = true"
+        - "unlock.investigation_help"  # 调查阶段帮助
+      if_rejected:
+        - "hiro.affection -= 30"
+        - "hiro 独自行动，可能错过线索"
+
+  # ───────────────────────────────────────
+
+  noa_artist_madness:
+    character: noa
+    description: "诺亚的艺术家疯狂线"
+
+    prerequisites:
+      - "day >= 4"
+      - "noa.madness >= 40"
+
+    trigger_conditions:
+      - "作品被破坏/批评"
+      - "完美主义被触发"
+      - "独处时间过长"
+
+    stages:
+      - stage: obsession
+        day_range: [3, 4]
+        description: "对创作越来越执着"
+        signs: ["不吃饭", "画到深夜", "自言自语"]
+
+      - stage: isolation
+        day_range: [4, 5]
+        description: "开始回避他人"
+        trigger: "noa.stress >= 50"
+
+      - stage: breaking
+        day_range: [5, 6]
+        description: "作品意外被毁，临界点"
+        trigger: "flag.noa_artwork_destroyed"
+
+      - stage: witch_path
+        day_range: [6, 7]
+        description: "魔女化或被拯救"
+        branches:
+          saved: "有人真正理解她的创作 → 压力释放"
+          lost: "无人理解 → 魔女化"
+
+    outcomes:
+      if_saved:
+        - "noa.madness -= 30"
+        - "flag.noa_saved = true"
+      if_lost:
+        - "noa.madness = 100"
+        - "flag.potential_killer = noa"
+
+  # ───────────────────────────────────────
+
+  sherry_facade:
+    character: sherry
+    description: "雪莉的假面崩塌线"
+
+    prerequisites:
+      - "interactions.sherry >= 5"
+      - "day >= 4"
+
+    trigger_conditions:
+      - "有人注意到她的异常"
+      - "独处时被撞见真实表情"
+
+    stages:
+      - stage: perfect_mask
+        day_range: [1, 3]
+        description: "永远开朗的假面"
+        player_can_notice: false
+
+      - stage: cracks
+        day_range: [3, 5]
+        description: "偶尔的停顿，空洞的眼神"
+        player_can_notice: true
+
+      - stage: reveal
+        day_range: [5, 6]
+        description: "独处时的真实"
+        trigger: "player在错误时间出现"
+
+      - stage: truth
+        day_range: [6, 7]
+        description: "承认或继续假装"
+        player_choice: true
+
+    outcomes:
+      if_accepted:
+        - "sherry.affection += 40"
+        - "flag.sherry_real = true"
+      if_ignored:
+        - "sherry继续假装"
+        - "sherry.stress += 20"
+
+# ═══════════════════════════════════════════
+# 弧线冲突处理
+# ═══════════════════════════════════════════
+
+conflict_resolution:
+  # 当多个弧线同时触发时
+  priority_rules:
+    - "murder_arc > character_arc"      # 杀人线优先
+    - "player_involved > background"    # 玩家参与的优先
+    - "earlier_stage > later_stage"     # 先进入的优先
+
+  merge_rules:
+    - "同一天最多2个角色进入breakdown阶段"
+    - "如果有murder_arc，其他breakdown延后"
+
+# ═══════════════════════════════════════════
+# 弧线标记系统
+# ═══════════════════════════════════════════
+
+arc_flags:
+  # 弧线进度标记
+  "{char}_arc_stage": "当前弧线阶段 (hint/crack/breakdown/aftermath)"
+  "{char}_arc_triggered": "弧线是否已触发"
+  "{char}_arc_resolved": "弧线是否已解决"
+
+  # 特殊标记
+  "potential_killer": "可能的凶手角色ID"
+  "potential_victim": "可能的受害者角色ID"
+  "intervention_available": "玩家介入窗口开放"

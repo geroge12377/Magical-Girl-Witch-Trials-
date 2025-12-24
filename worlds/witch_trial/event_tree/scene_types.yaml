@@ -1,0 +1,160 @@
+# worlds/witch_trial/event_tree/scene_types.yaml
+
+# ═══════════════════════════════════════════
+# 场景维度定义（AI组合生成）
+# ═══════════════════════════════════════════
+
+# 不是穷举所有场景，而是定义维度让AI自由组合
+# 理论组合：4×15×5×4×3 = 3600种
+
+dimensions:
+  # 参与人数
+  participants:
+    solo: "独处（玩家观察某人独自行动）"
+    duo: "二人（两个角色互动）"
+    small_group: "小群（3-4人）"
+    crowd: "多人（5人以上）"
+
+  # 活动类型
+  activity:
+    静止类:
+      - idle: "发呆"
+      - thinking: "沉思"
+      - sleeping: "睡觉"
+      - crying: "哭泣"
+      - staring: "盯着某处看"
+
+    日常类:
+      - eating: "吃饭"
+      - reading: "看书"
+      - walking: "散步"
+      - cleaning: "整理"
+      - exercising: "活动身体"
+
+    社交类:
+      - chatting: "闲聊"
+      - arguing: "争论"
+      - comforting: "安慰"
+      - confiding: "倾诉"
+      - teasing: "打趣"
+
+    特殊类:
+      - whispering: "密谈"
+      - watching: "监视"
+      - hiding: "躲藏"
+      - searching: "寻找"
+      - practicing_magic: "练习魔法"
+
+  # 氛围
+  mood:
+    peaceful: "平静"
+    relaxed: "轻松"
+    tense: "紧张"
+    sad: "悲伤"
+    eerie: "诡异"
+
+  # 玩家角色
+  player_role:
+    spectator: "旁观（只看不参与）"
+    passerby: "偶遇（路过撞见）"
+    participant: "可参与（有选项）"
+    involved: "被卷入（无法回避）"
+
+  # 信息价值
+  info_value:
+    none: "纯日常，无信息"
+    hint: "暗示某事"
+    clue: "明确线索"
+
+# ═══════════════════════════════════════════
+# 场景生成规则
+# ═══════════════════════════════════════════
+
+generation_rules:
+  # 根据arc阶段限制可用组合
+  arc_constraints:
+    起:
+      allowed_moods: [peaceful, relaxed]
+      allowed_player_roles: [spectator, passerby]
+      info_value_weights: {none: 0.7, hint: 0.3, clue: 0}
+
+    承:
+      allowed_moods: [peaceful, relaxed, tense]
+      allowed_player_roles: [spectator, passerby, participant]
+      info_value_weights: {none: 0.5, hint: 0.4, clue: 0.1}
+
+    转:
+      allowed_moods: [tense, sad, eerie, peaceful]
+      allowed_player_roles: [participant, involved, spectator]
+      info_value_weights: {none: 0.2, hint: 0.4, clue: 0.4}
+
+    合:
+      allowed_moods: [tense, sad, eerie]
+      allowed_player_roles: [involved, participant]
+      info_value_weights: {none: 0.1, hint: 0.3, clue: 0.6}
+
+  # 避免重复
+  anti_repetition:
+    same_location_cooldown: 2      # 同一地点间隔2场景
+    same_character_focus_cooldown: 3  # 同一角色为焦点间隔3场景
+    same_activity_cooldown: 2      # 同一活动类型间隔2场景
+
+# ═══════════════════════════════════════════
+# 场景结构模板
+# ═══════════════════════════════════════════
+
+scene_structure:
+  # 1. 开场（10-15%）- 建立画面
+  opening:
+    purpose: "让玩家进入场景，建立氛围"
+    content:
+      - 环境描写（光线、声音、气味）
+      - 角色状态（在做什么、表情、姿态）
+      - 时间感（什么时段的感觉）
+    example: "午后的图书室很安静。灰尘在阳光中漂浮。角落里，诺亚正对着画布发呆，笔尖的颜料已经干了。"
+
+  # 2. 铺垫（15-20%）- 引入张力
+  setup:
+    purpose: "让玩家感到「有什么事要发生」"
+    content:
+      - 角色的小动作、反应
+      - 暗示某种情绪/秘密
+      - 玩家的介入（靠近、被发现）
+    example: "你的脚步声让她回过神。她看了你一眼，又迅速移开目光。画布上空空如也。"
+
+  # 3. 发展（30-40%）- 展开互动
+  development:
+    purpose: "角色之间的实质互动"
+    content:
+      - 对话（但不是纯对话，穿插动作描写）
+      - 情绪变化
+      - 信息透露（可以是暗示）
+    example: |
+      「...你也画画吗？」她的声音很轻。
+      诺亚拿起一支干掉的笔，又放下。
+      「我在想，什么样的画才值得被完成。」
+      她的手指无意识地抚过画布边缘，那里有几道划痕。
+
+  # 4. 转折/高潮（15-20%）- 关键时刻
+  turning_point:
+    purpose: "场景的核心事件，给玩家留下印象"
+    content:
+      - 意外发生（打断、发现、情绪爆发）
+      - 或者：关键信息揭露
+      - 或者：关系变化的瞬间
+    example: "她突然握紧了笔。指节发白。「你见过完美的东西被毁掉吗？」她问，眼睛没有看你。"
+
+  # 5. 选择点（如果有）
+  choice_point:
+    purpose: "玩家参与，影响走向"
+    placement: "通常在转折后"
+    design_principle: "选项反映态度，不是对错"
+
+  # 6. 收尾（10-15%）- 余韵
+  resolution:
+    purpose: "让场景有完结感，但留下回味"
+    content:
+      - 角色的最后反应
+      - 环境变化（时间流逝、光线变化）
+      - 悬念或情感落点
+    example: "诺亚没有再说话。你离开时，她已经重新面对画布。但那支笔，始终没有落下。"

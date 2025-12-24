@@ -1,0 +1,141 @@
+# worlds/witch_trial/event_tree/triggers.yaml
+
+# ═══════════════════════════════════════════
+# 条件变量定义
+# ═══════════════════════════════════════════
+
+variables:
+  # 时间相关
+  day: "当前天数 (1-7)"
+  period: "当前时段 (dawn/morning/noon/afternoon/evening/night)"
+  event_count: "当天已发生事件数"
+
+  # 角色状态（char_id.xxx）
+  "{char}.stress": "压力值 (0-100)"
+  "{char}.madness": "魔女化程度 (0-100)"
+  "{char}.affection": "对玩家好感 (0-100)"
+  "{char}.location": "当前位置"
+  "{char}.is_alone": "是否独处"
+
+  # 关系（rel.char1.char2.xxx）
+  "rel.{a}.{b}.trust": "信任度 (-100 to 100)"
+  "rel.{a}.{b}.conflict": "冲突计数"
+
+  # 标记
+  "flag.xxx": "布尔标记"
+  "seen.xxx": "玩家是否见过某事件"
+
+  # 统计
+  "interactions.{char}": "与某角色互动次数"
+  "scenes_today": "今日场景数"
+
+# ═══════════════════════════════════════════
+# 通用触发条件模板
+# ═══════════════════════════════════════════
+
+trigger_templates:
+  # 角色崩溃
+  character_breakdown:
+    description: "角色情绪崩溃"
+    conditions:
+      - "{char}.stress >= 80"
+      - "{char}.madness >= 50"
+      - "trigger_event occurred"  # 某个触发事件发生
+    probability: 0.7
+    cooldown: "once_per_playthrough"
+
+  # 秘密暴露
+  secret_revealed:
+    description: "角色秘密被揭穿"
+    conditions:
+      - "day >= 3"
+      - "interactions.{char} >= 5"
+      - "flag.{char}_secret_hint"
+    probability: 0.5
+
+  # 冲突升级
+  conflict_escalation:
+    description: "两角色冲突升级"
+    conditions:
+      - "rel.{a}.{b}.conflict >= 2"
+      - "rel.{a}.{b}.trust <= -30"
+      - "{a}.stress >= 60 OR {b}.stress >= 60"
+    probability: 0.6
+
+  # 魔女化临界
+  witch_critical:
+    description: "某角色接近魔女化"
+    conditions:
+      - "{char}.madness >= 80"
+      - "day >= 5"
+    probability: 1.0  # 必定触发警告
+
+  # 杀意形成
+  murder_intent:
+    description: "杀意形成"
+    conditions:
+      - "{killer}.madness >= 80"
+      - "rel.{killer}.{target}.trust <= -50"
+      - "flag.{killer}_motive"
+    probability: 0.8
+
+  # 玩家介入窗口
+  intervention_window:
+    description: "玩家可以介入阻止"
+    conditions:
+      - "flag.murder_prep_active"
+      - "player.location == {danger_location}"
+      - "period in [evening, night]"
+    probability: 1.0
+
+# ═══════════════════════════════════════════
+# 状态变化规则
+# ═══════════════════════════════════════════
+
+state_change_rules:
+  # 压力累积
+  stress_increase:
+    triggers:
+      - "被批评/指责"
+      - "秘密被触及"
+      - "孤立无援"
+      - "目睹冲突"
+    amount: 5-15
+
+  stress_decrease:
+    triggers:
+      - "被安慰"
+      - "成功倾诉"
+      - "与朋友相处"
+      - "放松活动"
+    amount: 5-10
+
+  # 魔女化进展
+  madness_increase:
+    triggers:
+      - "创伤被触发"
+      - "压力爆发"
+      - "目睹死亡"
+      - "被背叛"
+    amount: 10-25
+
+  madness_decrease:
+    triggers:
+      - "被理解"
+      - "找到出口"
+      - "玩家深度支持"
+    amount: 5-15
+    note: "魔女化降低很难，需要多次有意义的互动"
+
+  # 好感度变化
+  affection_change:
+    positive:
+      - "帮助角色"
+      - "理解角色"
+      - "正确选项"
+      - "多次互动"
+    negative:
+      - "伤害角色"
+      - "忽视求助"
+      - "触碰禁忌话题"
+      - "背叛信任"
