@@ -595,9 +595,27 @@ class GameLoopV3:
             if i < len(scene_plan.beats) - 1:
                 input("\n[按Enter继续...]")
 
-        # 9. 场景结束
+        # 9. 场景结束 - 【连续性新增】显示结尾提示
         print("\n" + "=" * 50)
         print("[场景结束]")
+
+        # 显示结尾类型
+        ending_type_labels = {
+            "closed": "完结",
+            "open": "未完待续",
+            "cliffhanger": "悬念"
+        }
+        ending_label = ending_type_labels.get(scene_plan.ending_type, "未知")
+        print(f"结尾方式: {ending_label}")
+
+        # 显示下一场景提示
+        if scene_plan.next_scene_hint:
+            print(f"\n{scene_plan.next_scene_hint}")
+
+        # 显示延续要素
+        if scene_plan.carryover_elements:
+            print(f"\n[记住] {', '.join(scene_plan.carryover_elements)}")
+
         print("=" * 50)
 
         # 应用场景结果

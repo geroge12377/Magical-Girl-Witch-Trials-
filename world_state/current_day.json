@@ -1,9 +1,9 @@
 {
   "chapter": 1,
-  "day": 2,
+  "day": 1,
   "period": "dawn",
   "phase": "free_time",
-  "event_count": 12,
+  "event_count": 0,
   "daily_event_count": 0,
   "alive_count": 13,
   "dead_count": 0,
@@ -12,26 +12,7 @@
   "victim_id": null,
   "crime_scene": null,
   "case_status": "no_case",
-  "flags": {
-    "hiro_defied_warden": true,
-    "library_secret_discovered": true,
-    "team_alliance_formed": true,
-    "mystery_room_found": true,
-    "alliance_formed": true,
-    "密室入口_found": true,
-    "prison_alliance_formed": true,
-    "reia_vulnerability_exposed": true,
-    "hannah_mediator_role": true
-  },
-  "triggered_events": [
-    "day1_awakening",
-    "day1_morning_assembly",
-    "day1_rules_announcement",
-    "day1_hiro_incident",
-    "day1_introduction",
-    "day1_lunch",
-    "day1_dinner",
-    "day1_night"
-  ],
+  "flags": {},
+  "triggered_events": [],
   "next_event": null
 }

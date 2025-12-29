@@ -64,6 +64,11 @@ class ScenePlan:
     outcomes: Dict[str, Any]  # 可能的结果
     recommended_bgm: str
 
+    # 【连续性新增字段】
+    ending_type: str = "open"  # "closed" | "open" | "cliffhanger"
+    next_scene_hint: Optional[str] = None  # 下一场景暗示，如"她转身离开，留下..."
+    carryover_elements: List[str] = field(default_factory=list)  # 延续要素，如["未看完的书", "不安的气氛"]
+
 
 # ============================================================================
 # 工具函数
@@ -236,6 +241,81 @@ class DirectorPlanner:
             "character_states": character_states
         }
 
+    def _load_narrative_context(self) -> Dict:
+        """【连续性新增】加载叙事上下文"""
+        narrative_path = self.project_root / "world_state" / "narrative_context.json"
+        if narrative_path.exists():
+            return load_json(narrative_path)
+        return {
+            "last_scene": None,
+            "recent_scenes": [],
+            "character_recent_interactions": {},
+            "unresolved_topics": [],
+            "active_atmosphere": "neutral"
+        }
+
+    def _save_narrative_context(self, context: Dict):
+        """【连续性新增】保存叙事上下文"""
+        narrative_path = self.project_root / "world_state" / "narrative_context.json"
+        with open(narrative_path, 'w', encoding='utf-8') as f:
+            json.dump(context, f, ensure_ascii=False, indent=2)
+
+    def _build_narrative_memory_prompt(self, narrative_ctx: Dict, characters: List[str]) -> str:
+        """【连续性新增】构建叙事记忆prompt"""
+        if not narrative_ctx.get("last_scene"):
+            return ""
+
+        last_scene = narrative_ctx.get("last_scene", {})
+        recent_scenes = narrative_ctx.get("recent_scenes", [])[-2:]  # 最近2个场景
+
+        memory_parts = []
+
+        # 上一场景信息
+        if last_scene:
+            memory_parts.append(f"""
+【上一场景延续】
+地点: {last_scene.get('location', '未知')}
+结尾方式: {last_scene.get('ending_type', 'open')}
+结尾提示: {last_scene.get('next_scene_hint', '无')}
+延续要素: {', '.join(last_scene.get('carryover_elements', []))}
+参与角色: {', '.join(last_scene.get('characters', []))}
+""")
+
+        # 角色最近互动记忆
+        char_memories = []
+        for char in characters:
+            if char in narrative_ctx.get("character_recent_interactions", {}):
+                interaction = narrative_ctx["character_recent_interactions"][char]
+                char_memories.append(f"  - {char}: {interaction}")
+
+        if char_memories:
+            memory_parts.append(f"""
+【角色记忆】本场景中的角色最近的状态:
+{chr(10).join(char_memories)}
+""")
+
+        # 未解决话题
+        if narrative_ctx.get("unresolved_topics"):
+            topics_str = '\n'.join(f"  - {topic}" for topic in narrative_ctx["unresolved_topics"][-3:])
+            memory_parts.append(f"""
+【未解决话题】
+{topics_str}
+""")
+
+        if memory_parts:
+            return f"""
+【叙事连续性】⭐ 重要
+{"".join(memory_parts)}
+
+【连续性要求】
+1. 如果上一场景有"延续要素"，本场景应自然提及或体现
+2. 角色应该记得最近的互动，不要"失忆"
+3. 如果有未解决话题，可以在合适时机继续推进（但不要强行插入）
+4. 情绪和氛围应该有延续性，不要突然跳转
+"""
+
+        return ""
+
     def load_character_data(self, char_id: str) -> Dict:
         """加载角色完整数据"""
         char_path = self.project_root / "characters" / char_id
@@ -307,6 +387,9 @@ class DirectorPlanner:
         context = self.load_game_context()
         day = context.get("day", 1)
 
+        # 【连续性新增】加载叙事上下文
+        narrative_ctx = self._load_narrative_context()
+
         # 2. 读取当天大纲
         day_outline = self._load_day_outline(day)
 
@@ -336,6 +419,9 @@ class DirectorPlanner:
         # 【v9新增】构建故事上下文
         story_context = self._build_story_context(day)
 
+        # 【连续性新增】构建叙事记忆prompt
+        narrative_memory = self._build_narrative_memory_prompt(narrative_ctx, list(chars_at_location))
+
         # 【v9新增】检查重复风险
         repetition_check = self._check_repetition(location, chars_at_location)
 
@@ -343,12 +429,13 @@ class DirectorPlanner:
         game_context = self.event_engine.load_game_context()
         triggered_events = self.event_engine.check_triggers(game_context)
 
-        # 5. 构建prompt（传入大纲信息 + 约束）
+        # 5. 构建prompt（传入大纲信息 + 约束 + 叙事记忆）
         prompt = self._build_planner_prompt(
             context, characters_info, location, scene_type,
             fixed_event_data, day_outline,
             dynamic_constraints=dynamic_constraints,
             story_context=story_context,
+            narrative_memory=narrative_memory,  # 【连续性新增】
             repetition_warnings=repetition_check.get("warnings", []),
             triggered_events=triggered_events
         )
@@ -373,6 +460,9 @@ class DirectorPlanner:
 
             # 【v9新增】记录到历史
             self._record_scene(scene_plan)
+
+            # 【连续性新增】保存到叙事上下文
+            self._save_scene_to_narrative(scene_plan, chars_at_location)
 
             return scene_plan
 
@@ -434,6 +524,51 @@ class DirectorPlanner:
         self._save_scene_history()
         print(f"[DirectorPlanner] 场景已记录: {scene_plan.scene_id}")
 
+    def _save_scene_to_narrative(self, scene_plan: ScenePlan, characters: List[str]):
+        """【连续性新增】保存场景到叙事上下文"""
+        narrative_ctx = self._load_narrative_context()
+
+        # 提取主要角色
+        main_chars = []
+        for beat in scene_plan.beats:
+            for char in beat.characters:
+                if char not in main_chars and char != "narrator":
+                    main_chars.append(char)
+
+        # 构建场景摘要
+        scene_summary = {
+            "scene_id": scene_plan.scene_id,
+            "location": scene_plan.location,
+            "characters": main_chars,
+            "ending_type": scene_plan.ending_type,
+            "next_scene_hint": scene_plan.next_scene_hint,
+            "carryover_elements": scene_plan.carryover_elements,
+            "overall_arc": scene_plan.overall_arc
+        }
+
+        # 更新last_scene
+        narrative_ctx["last_scene"] = scene_summary
+
+        # 添加到recent_scenes（保留最近5个）
+        narrative_ctx["recent_scenes"].append(scene_summary)
+        narrative_ctx["recent_scenes"] = narrative_ctx["recent_scenes"][-5:]
+
+        # 更新角色最近互动
+        for char in main_chars[:3]:
+            narrative_ctx["character_recent_interactions"][char] = f"{scene_plan.location}场景，{scene_plan.ending_type}结尾"
+
+        # 如果有延续要素，添加到未解决话题
+        if scene_plan.carryover_elements:
+            for element in scene_plan.carryover_elements:
+                if element not in narrative_ctx["unresolved_topics"]:
+                    narrative_ctx["unresolved_topics"].append(element)
+            # 保留最近10个
+            narrative_ctx["unresolved_topics"] = narrative_ctx["unresolved_topics"][-10:]
+
+        # 保存
+        self._save_narrative_context(narrative_ctx)
+        print(f"[DirectorPlanner] 叙事上下文已更新: {scene_plan.ending_type}结尾")
+
     def _build_planner_prompt(
         self,
         context: Dict,
@@ -444,10 +579,11 @@ class DirectorPlanner:
         day_outline: Optional[Dict] = None,
         dynamic_constraints: str = "",
         story_context: str = "",
+        narrative_memory: str = "",  # 【连续性新增】
         repetition_warnings: List[str] = None,
         triggered_events: List = None
     ) -> str:
-        """构建规划层prompt（v9增强版）"""
+        """构建规划层prompt（v9增强版 + 连续性v11）"""
 
         if repetition_warnings is None:
             repetition_warnings = []
@@ -537,7 +673,7 @@ class DirectorPlanner:
                 f"- {e.trigger_id}: {e.description}" for e in triggered_events[:3]
             )
 
-        # 组合prompt（v9增强版）
+        # 组合prompt（v9增强版 + 连续性v11）
         prompt = f"""你是一位经验丰富的视觉小说导演。你的任务是规划一个场景的剧本大纲。
 
 【游戏背景】
@@ -548,6 +684,8 @@ class DirectorPlanner:
 {story_context}
 
 {dynamic_constraints}
+
+{narrative_memory}
 
 【当前状态】
 {context_str}
@@ -630,7 +768,12 @@ class DirectorPlanner:
             key_moments=result.get("key_moments", []),
             player_choice_point=result.get("player_choice_point"),
             outcomes=result.get("outcomes", {}),
-            recommended_bgm=result.get("recommended_bgm", "ambient_tension")
+            recommended_bgm=result.get("recommended_bgm", "ambient_tension"),
+
+            # 【连续性字段解析】
+            ending_type=result.get("ending_type", "open"),
+            next_scene_hint=result.get("next_scene_hint"),
+            carryover_elements=result.get("carryover_elements", [])
         )
 
     def _create_empty_scene(self, location: str) -> ScenePlan:

@@ -512,25 +512,32 @@ class CharacterActor:
     # ============================================================================
 
     def _check_empty_beats(self, outputs: List[DialogueOutput]) -> List[str]:
-        """检查哪些 Beat 内容为空"""
+        """【v11改进】检查哪些 Beat 内容为空或过短"""
         empty = []
         for output in outputs:
-            # 检查对话列表是否为空或只有空字符串
+            # 检查对话列表是否为空
+            if not output.dialogue:
+                empty.append(output.beat_id)
+                continue
+
+            # 检查是否只有空字符串或过短内容（至少10个字符）
             has_content = any(
-                line.text_cn and line.text_cn.strip() and line.text_cn.strip() != "..."
+                line.text_cn and line.text_cn.strip() and len(line.text_cn.strip()) > 10
                 for line in output.dialogue
             )
             if not has_content:
                 empty.append(output.beat_id)
+
         return empty
 
     def _fill_empty_beats_with_fallback(
         self,
         outputs: List[DialogueOutput],
         empty_beats: List[str],
-        beats: List  # List[Beat]
+        beats: List,  # List[Beat]
+        location: str = None  # 【v11新增】传入地点
     ) -> List[DialogueOutput]:
-        """用回退内容填充空 Beat"""
+        """【v11改进】用回退内容填充空 Beat"""
         for output in outputs:
             if output.beat_id in empty_beats:
                 # 找到对应的 Beat 信息
@@ -539,30 +546,79 @@ class CharacterActor:
                     None
                 )
                 if beat_info:
-                    # 生成回退内容
-                    fallback_text = self._generate_fallback_narration(beat_info)
-                    output.dialogue = [
-                        DialogueLine(
-                            speaker="narrator",
-                            text_cn=fallback_text,
-                            text_jp=fallback_text,
-                            emotion="neutral"
-                        )
-                    ]
+                    # 【v11改进】生成更丰富的回退内容
+                    output.dialogue = self._generate_fallback_narration(beat_info, location)
         return outputs
 
-    def _generate_fallback_narration(self, beat) -> str:
-        """根据 Beat 信息生成回退叙述"""
-        templates = {
-            "opening": "你来到了这里。{description}",
-            "development": "{description} 气氛变得微妙起来。",
-            "tension": "空气中弥漫着一丝紧张。{description}",
-            "climax": "{description} 这一刻似乎格外漫长。",
-            "resolution": "时间静静流逝。{description}"
-        }
-        template = templates.get(beat.beat_type, "{description}")
-        desc = beat.description[:50] if len(beat.description) > 50 else beat.description
-        return template.format(description=desc)
+    # ============================================================================
+    # 【v11改进】地点感知的回退内容生成
+    # ============================================================================
+
+    # 地点环境描写模板
+    LOCATION_DESCRIPTIONS = {
+        "食堂": "食堂里弥漫着淡淡的饭菜香气，长桌上整齐地摆放着餐具。窗外的阳光斜斜地照进来，在地板上投下明亮的光斑。",
+        "图书室": "图书室里很安静，阳光透过窗户洒在书架上，灰尘在光线中轻轻飘浮。书页翻动的沙沙声偶尔响起。",
+        "庭院": "庭院里微风轻拂，午后的阳光温暖而柔和。远处传来鸟鸣声，空气中弥漫着青草的气息。",
+        "走廊": "长长的走廊寂静无声，窗外的光线在地板上投下斑驳的影子。脚步声在空旷的走廊里回响。",
+        "牢房区": "牢房区的空气有些沉闷，铁栏杆在昏暗的光线中泛着冷光。这里的寂静令人感到压抑。",
+    }
+
+    def _generate_fallback_narration(self, beat, location: str = None) -> List[DialogueLine]:
+        """【v11改进】根据 Beat 信息生成更丰富的回退叙述"""
+
+        # 获取环境描写
+        env_desc = self.LOCATION_DESCRIPTIONS.get(
+            location, "这里很安静，空气中弥漫着微妙的紧张感。"
+        )
+
+        # 根据 Beat 类型生成不同内容
+        if beat.beat_type == "opening":
+            lines = [
+                DialogueLine(
+                    speaker="narrator",
+                    text_cn=env_desc,
+                    text_jp=env_desc,
+                    emotion="neutral"
+                ),
+                DialogueLine(
+                    speaker="narrator",
+                    text_cn=beat.description if beat.description else "你环顾四周，观察着周围的一切。",
+                    text_jp=beat.description if beat.description else "あなたは周りを見回し、周囲の様子を観察している。",
+                    emotion="neutral"
+                )
+            ]
+        elif beat.beat_type == "resolution":
+            lines = [
+                DialogueLine(
+                    speaker="narrator",
+                    text_cn=f"时间静静流逝。{beat.description}" if beat.description else "时间静静流逝，这段插曲就此结束。",
+                    text_jp=f"時間は静かに流れていく。{beat.description}" if beat.description else "時間は静かに流れ、このひと時は終わりを迎える。",
+                    emotion="neutral"
+                )
+            ]
+        else:
+            # development, tension, climax
+            lines = [
+                DialogueLine(
+                    speaker="narrator",
+                    text_cn=beat.description if beat.description else "气氛变得微妙起来。",
+                    text_jp=beat.description if beat.description else "雰囲気が微妙になってきた。",
+                    emotion="neutral"
+                )
+            ]
+
+            # 如果有角色，添加一句简单对话
+            if beat.characters:
+                char = beat.characters[0]
+                lines.append(DialogueLine(
+                    speaker=char,
+                    text_cn="......",
+                    text_jp="......",
+                    emotion="neutral",
+                    action="沉默着"
+                ))
+
+        return lines
 
     # ============================================================================
     # 【v10新增】幻觉角色名检测与修正

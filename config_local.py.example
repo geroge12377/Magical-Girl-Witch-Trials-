@@ -1,5 +1,23 @@
-# config_local.py - 本地API配置（不上传到git）
+# config_local.py.example - 本地API配置模板
 # 使用方法：复制此文件为 config_local.py，填入你的API Key
+# 注意：config_local.py 不会上传到 git
 
-# Anthropic API Key
-ANTHROPIC_API_KEY = "sk-ant-api03-xxxxxxxxx"
+# ============================================
+# 方式1：单个 API Key（简单）
+# ============================================
+ANTHROPIC_API_KEY = "sk-ant-api03-你的API密钥"
+
+# ============================================
+# 方式2：多个 API Key（可选，分散 rate limit）
+# ============================================
+# 如果你有多个 API Key，可以分别配置：
+# ANTHROPIC_API_KEY_CHARACTER = "sk-ant-api03-角色演出用key"
+# ANTHROPIC_API_KEY_DIRECTOR = "sk-ant-api03-导演规划用key"
+# ANTHROPIC_API_KEY_CONTROLLER = "sk-ant-api03-中控API用key"
+
+# ============================================
+# 说明
+# ============================================
+# - 如果只设置 ANTHROPIC_API_KEY，三个服务都会用这个 key
+# - 如果设置了 ANTHROPIC_API_KEY_XXX，对应服务会优先使用专用 key
+# - 优先级：专用 key > 通用 key

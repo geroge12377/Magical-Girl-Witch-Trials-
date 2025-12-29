@@ -11,8 +11,28 @@ from pathlib import Path
 
 # 尝试从 config_local.py 读取（本地开发用，不上传到git）
 _LOCAL_API_KEY = ""
+_LOCAL_KEYS = {}
+
 try:
     from config_local import ANTHROPIC_API_KEY as _LOCAL_API_KEY
+except ImportError:
+    pass
+
+try:
+    from config_local import ANTHROPIC_API_KEY_CHARACTER
+    _LOCAL_KEYS["character"] = ANTHROPIC_API_KEY_CHARACTER
+except ImportError:
+    pass
+
+try:
+    from config_local import ANTHROPIC_API_KEY_DIRECTOR
+    _LOCAL_KEYS["director"] = ANTHROPIC_API_KEY_DIRECTOR
+except ImportError:
+    pass
+
+try:
+    from config_local import ANTHROPIC_API_KEY_CONTROLLER
+    _LOCAL_KEYS["controller"] = ANTHROPIC_API_KEY_CONTROLLER
 except ImportError:
     pass
 
@@ -20,14 +40,16 @@ except ImportError:
 _DEFAULT_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "") or _LOCAL_API_KEY
 
 API_KEYS = {
-    "character": os.environ.get("ANTHROPIC_API_KEY_CHARACTER", _DEFAULT_API_KEY),   # 角色API用
-    "director": os.environ.get("ANTHROPIC_API_KEY_DIRECTOR", _DEFAULT_API_KEY),     # 导演API用
-    "controller": os.environ.get("ANTHROPIC_API_KEY_CONTROLLER", _DEFAULT_API_KEY)  # 中控API用
+    "character": os.environ.get("ANTHROPIC_API_KEY_CHARACTER") or _LOCAL_KEYS.get("character") or _DEFAULT_API_KEY,
+    "director": os.environ.get("ANTHROPIC_API_KEY_DIRECTOR") or _LOCAL_KEYS.get("director") or _DEFAULT_API_KEY,
+    "controller": os.environ.get("ANTHROPIC_API_KEY_CONTROLLER") or _LOCAL_KEYS.get("controller") or _DEFAULT_API_KEY,
 }
 
 # 模型配置
-MODEL = "claude-sonnet-4-20250514"
-MAX_TOKENS = 1024
+# 注意: Claude 3.5 Sonnet 已升级为 Claude Sonnet 4
+# 可用模型: claude-sonnet-4-20250514, claude-3-haiku-20240307
+MODEL = "claude-sonnet-4-20250514"  # Claude Sonnet 4
+MAX_TOKENS = 4096  # 增加token限制
 
 # ============================================
 # 缓存设置
@@ -54,9 +76,11 @@ def get_api_key(service_type="director"):
     获取指定服务的API Key
 
     优先级:
-    1. 环境变量 ANTHROPIC_API_KEY_<SERVICE> 或 ANTHROPIC_API_KEY
-    2. config_local.py 中的 ANTHROPIC_API_KEY
-    3. 抛出错误
+    1. 环境变量 ANTHROPIC_API_KEY_<SERVICE>
+    2. config_local.py 中的 ANTHROPIC_API_KEY_<SERVICE>
+    3. 环境变量 ANTHROPIC_API_KEY
+    4. config_local.py 中的 ANTHROPIC_API_KEY
+    5. 抛出错误
     """
     key = API_KEYS.get(service_type) or API_KEYS.get("director") or _DEFAULT_API_KEY
 
@@ -71,7 +95,11 @@ def get_api_key(service_type="director"):
             f"  Linux/Mac: export ANTHROPIC_API_KEY=sk-ant-api03-xxx\n\n"
             f"方式2: 创建 config_local.py 文件\n"
             f"  在项目根目录创建 config_local.py，内容:\n"
-            f"  ANTHROPIC_API_KEY = 'sk-ant-api03-xxx'\n"
+            f"  ANTHROPIC_API_KEY = 'sk-ant-api03-xxx'\n\n"
+            f"方式3: 多个 API Key（可选）\n"
+            f"  ANTHROPIC_API_KEY_CHARACTER = 'sk-ant-api03-key1'\n"
+            f"  ANTHROPIC_API_KEY_DIRECTOR = 'sk-ant-api03-key2'\n"
+            f"  ANTHROPIC_API_KEY_CONTROLLER = 'sk-ant-api03-key3'\n"
             f"{'='*60}"
         )
 
