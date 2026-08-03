@@ -1,72 +1,82 @@
-# 魔法少女的魔女审判 - API测试项目
+# 魔法少女的魔女审判（Witch Trials）
 
-## 目录结构
+**LLM 驱动的多角色叙事引擎** —— 14 个独立建模的角色、三层导演架构、由压力/疯狂值驱动的动态杀人事件。类弹丸论破结构的 AI 视觉小说实验：剧情不是写死的脚本，而是由「故事规划 → 场景导演 → 角色演出」三层 LLM 协作实时生成。
+
+> **关于原作**：本项目是对游戏《魔法少女的魔女审判》的同人系统化重构——角色与世界观来自原作，本项目的工作是引擎与系统设计：将原作角色转译为机器可执行的档案（心理触发→数值系统、分级人设、双语语言建模），并构建动态生成原作式剧情的三层 LLM 架构。非商用，仅作技术研究。
+
+> 状态：引擎核心（三层调度、场景生成、状态更新、故事连续性）已跑通并迭代至 v11；调查/审判阶段与周目系统未实装，项目暂停于内容生产阶段。详见[项目状态](#项目状态)。
+
+---
+
+## 核心架构：三层分离
 
 ```
-test_project/
-├── config.py                # API配置（需要填写API Key）
-├── test_api.py              # 测试脚本
-├── README.md                # 本文件
-├── characters/
-│   └── aima/
-│       ├── core.yaml        # 角色核心信息
-│       ├── personality.yaml # 性格档案
-│       ├── speech.yaml      # 语言模式
-│       └── relationships.yaml # 人际关系
-└── world_state/
-    ├── current_day.json     # 当前时间状态
-    ├── character_states.json # 13人状态
-    └── events_log.json      # 事件日志
+┌─────────────────────────────────────────────────┐
+│ 故事规划层   chapter_outline.json                │
+│  生成三天为单位的章节大纲（主题 / 关键事件）       │
+├─────────────────────────────────────────────────┤
+│ 导演规划层   DirectorPlanner → ScenePlan         │
+│  决定「演什么」：Beat 序列、参与角色、             │
+│  情绪目标、张力曲线(1-10)、玩家选择点             │
+├─────────────────────────────────────────────────┤
+│ 角色演出层   CharacterActor → DialogueOutput     │
+│  决定「怎么演」：按 Beat 指令生成符合人设的        │
+│  具体对话（中日双语），预生成选项回应              │
+└─────────────────────────────────────────────────┘
+              ↕ 读写
+   world_state/（13人实时状态 / 事件日志 / 待处理事件 / 叙事上下文）
 ```
 
-## 使用方法
+**为什么分层**：规划与演出解耦后，导演输出可审核可调试，同一份 ScenePlan 可换风格演绎，且选项回应可预生成——玩家选 A/B/C 时零延迟显示。三层各用独立 API Key 配置，配额与故障隔离（见 `config.py`）。
 
-### 1. 安装依赖
+## 设计亮点
+
+- **暗线杀人系统**：`murder_prep.json` 追踪杀手/目标/动机/准备进度。杀人事件不是定时脚本，由角色 madness 值越过阈值触发，玩家在明面剧情下感知到的是"某人最近不对劲"。
+- **戏剧节奏硬约束（SceneValidator）**：导演输出不直接信任——按当天所处的起承转合阶段加载基调约束，校验张力范围（"起"阶段禁止高张力爆发）、禁止内容、情绪合法性（"起"阶段不允许角色崩溃/魔女化）与对话密度，分 error/warning 两级。用结构性验证而非 prompt 堆砌来约束 LLM 的叙事失控。
+- **故事连续性系统（v11）**：`narrative_context.json` 在场景间传递未解决话题、角色近期互动与氛围；场景结尾分 closed / open / cliffhanger 三型（80% 场景强制开放式），对抗 LLM"每段输出完美收尾"的惯性，让剧情有钩子地流动。
+- **状态驱动而非剧本驱动**：每个角色的 stress / madness / emotion / location 实时演化，固定事件（如 murder_event: 第3天后 AND 最高madness>70）与导演生成的自由事件在同一状态机内冲突消解（merge / delay / interrupt）。
+- **分层 prompt 模板**（`prompts/`）：每条约束对应一次实测失效——角色名白名单（反幻觉）、Beat 最低内容量、双语第一人称分离（中文统一"我"，日文保留 私/俺/ウチ）、张力等级到语言风格的映射。
+- **角色建模四文件分层**：每个角色 `core / personality / speech / relationships` 四个 YAML——personality 含分级描述（minimal/simple/full 按 prompt 预算取用）与 hidden_truth，speech 含口癖、分情绪语气与中日双语示例台词。
+
+## 角色
+
+13 名囚人 + 幕后大魔女，共 14 个角色（`characters/`），基于原作角色做的**可执行档案建模**——把文学性人设转译为引擎可调用的结构：
+
+- **心理档案会"编译"**：personality 的 triggers 直接驱动 stress 数值系统（含双向：压力源与减压源），stress_response 分 mild/moderate/severe 三档行为描述供演出层取用
+- **语言差异化到第一人称**：14 个角色 9 种日文自称（僕/あたし/ウチ/わたくし/わがはい/おじさん…），口癖、分情绪语气、场景变体（对密友/对陌生人/独处）各配中日双语示例台词
+- **表里分层**：每人有表面人格、内心真相与 hidden_truth，独处场景的台词与社交场景形成反差
+
+样例见 [`characters/aima/`](characters/aima/)——讨好型人格从价值观、触发点到"愤怒以自我否定形式表达"的台词全链路一致。
+
+## 游戏结构
+
+状态机：`free_time → event → (发现尸体) → investigation → trial → 循环 / Bad End`
+结局：Bad End（审判错误/玩家魔女化）、Good End（无人死亡）、True End（全员存活+真相+联合觉醒）。多周目继承调查工具。
+
+## 项目状态
+
+| 已完成 | 未实装 |
+|---|---|
+| 14角色 YAML 建模 | 调查阶段逻辑（搜证/询问） |
+| 三层架构（story_planner / director_planner / character_actor） | 审判系统（投票/辩论） |
+| SceneValidator 戏剧节奏验证器 | 周目继承系统 |
+| 事件树引擎 + 固定事件管理器 | Unity 对接 |
+| ScenePlan/Beat 场景生成，预生成选项回应（零延迟） | |
+| 故事连续性系统 v11 | |
+| 固定/自由事件冲突消解 | |
+
+架构演进：v1 单层导演 → v2 事件驱动 → v3 三层架构，其后 v9 世界观/事件树、v10 修复、v11 场景质量与连续性（完整变更记录见 `STATUS.md`）。2025年12月迭代至 v11 后，毕业设计方向调整为长期陪伴系统（同一 LLM 角色系统研究线的另一分支），本项目暂停；复盘识别出的下一个硬问题是推理内容（调查/审判）的作者性约束，案件生成与验证的方案已在推进。
+
+## Quick Start
 
 ```bash
 pip install anthropic pyyaml
+cp config_local.py.example config_local.py   # 填入 Anthropic API Key
+python game_loop_v3.py                        # v3 三层架构（推荐）
+python test_api.py                            # 单角色 API 测试
 ```
 
-### 2. 配置API Key
+## 文档
 
-编辑 `config.py`，将 `你的API_KEY_填在这里` 替换为你的Anthropic API Key：
-
-```python
-ANTHROPIC_API_KEY = "sk-ant-xxxxx"
-```
-
-### 3. 运行测试
-
-```bash
-python test_api.py
-```
-
-### 4. 预期输出
-
-脚本会：
-1. 加载艾玛的角色数据
-2. 加载世界状态
-3. 构建prompt发送给Claude API
-4. 显示API返回的JSON结果
-
-## 测试场景
-
-默认测试场景：
-- 角色：艾玛（aima）
-- 位置：庭院
-- 玩家输入："你还好吗？看起来有点心事。"
-
-## 修改测试
-
-编辑 `test_api.py` 中的 `main()` 函数：
-
-```python
-character_id = "aima"  # 可改为其他角色
-player_input = "你还好吗？看起来有点心事。"  # 可改为其他输入
-```
-
-## 注意事项
-
-- 需要有效的Anthropic API Key
-- 默认使用 claude-sonnet-4-20250514 模型
-- 每次调用会消耗API额度
+- `PROJECT_DOC.md` —— 完整设计文档（API 契约、数据格式、事件系统、状态机）
+- `STATUS.md` —— 开发日志（含 v11 连续性系统的完整变更记录）
